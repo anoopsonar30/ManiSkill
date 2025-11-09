@@ -23,6 +23,7 @@ class PickCuboidEnv(BaseEnv):
     A simple task where the objective is to grasp a red cuboid and move it to a target goal position. Baseline task for MDPO
 
     **Randomizations:**
+    - the cuboid's size along the x and y axis is also randomized.
     - the cuboid's xy position is randomized on top of a table in the region [0.1, 0.1] x [-0.1, -0.1]. It is placed flat on the table
     - the cuboid's z-axis rotation is randomized to a random angle
     - the target goal position (marked by a green sphere) of the cuboid has its xy position randomized in the region [0.1, 0.1] x [-0.1, -0.1] and z randomized in [0, 0.3]
@@ -98,7 +99,7 @@ class PickCuboidEnv(BaseEnv):
          
         self.cuboid = actors.build_box(
             self.scene,
-            half_size=self.cuboid_half_sizes,
+            half_sizes=self.cuboid_half_sizes,
             color=[1, 0, 0, 1],
             name="cuboid",
             initial_pose=sapien.Pose(p=[0, 0, self.cuboid_half_sizes[2]]),
