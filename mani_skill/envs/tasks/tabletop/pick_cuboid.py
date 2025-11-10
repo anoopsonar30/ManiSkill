@@ -1,4 +1,4 @@
-from typing import Any, Dict, Union
+from typing import Any, Dict, List, Union
 
 import numpy as np
 import sapien
@@ -9,10 +9,11 @@ from mani_skill.agents.robots import SO100, Fetch, Panda, XArm6Robotiq
 from mani_skill.envs.sapien_env import BaseEnv
 from mani_skill.envs.tasks.tabletop.pick_cuboid_cfgs import PICK_CUBOID_CONFIGS
 from mani_skill.sensors.camera import CameraConfig
-from mani_skill.utils import sapien_utils
+from mani_skill.utils import common, sapien_utils
 from mani_skill.utils.building import actors
 from mani_skill.utils.registration import register_env
 from mani_skill.utils.scene_builder.table import TableSceneBuilder
+from mani_skill.utils.structs.actor import Actor
 from mani_skill.utils.structs.pose import Pose
 
 
@@ -85,25 +86,44 @@ class PickCuboidEnv(BaseEnv):
         )
         self.table_scene.build()
         
-        scale_x = np.random.uniform(0.5, 2.0)
-        scale_y = np.random.uniform(0.5, 2.0)
-        self.cuboid_half_sizes = [
-            self.cuboid_half_sizes[0] * scale_x,
-            self.cuboid_half_sizes[1] * scale_y,
-            self.cuboid_half_sizes[2],
-        ]
-
-        if self.cuboid_half_sizes[0] >= 0.04 and self.cuboid_half_sizes[1] >= 0.04:
-            index = np.random.choice([0, 1])
-            self.cuboid_half_sizes[index] = 0.03
-         
-        self.cuboid = actors.build_box(
-            self.scene,
-            half_sizes=self.cuboid_half_sizes,
-            color=[1, 0, 0, 1],
-            name="cuboid",
-            initial_pose=sapien.Pose(p=[0, 0, self.cuboid_half_sizes[2]]),
-        )
+        # Create per-environment cuboids with randomized dimensions
+        base_half_sizes = self.cuboid_half_sizes.copy()
+        self._cuboids: List[Actor] = []
+        self._cuboid_half_sizes_list = []
+        
+        for i in range(self.num_envs):
+            # Randomize dimensions for this environment
+            scale_x = np.random.uniform(0.5, 2.0)
+            scale_y = np.random.uniform(0.5, 2.0)
+            cuboid_half_sizes = [
+                base_half_sizes[0] * scale_x,
+                base_half_sizes[1] * scale_y,
+                base_half_sizes[2],
+            ]
+            
+            # Ensure at least one dimension is small enough to grasp
+            if cuboid_half_sizes[0] >= 0.04 and cuboid_half_sizes[1] >= 0.04:
+                index = np.random.choice([0, 1])
+                cuboid_half_sizes[index] = 0.03
+            
+            self._cuboid_half_sizes_list.append(cuboid_half_sizes)
+            
+            # Create cuboid for this specific environment
+            builder = self.scene.create_actor_builder()
+            builder.add_box_collision(half_size=cuboid_half_sizes)
+            builder.add_box_visual(
+                half_size=cuboid_half_sizes,
+                material=sapien.render.RenderMaterial(base_color=[1, 0, 0, 1]),
+            )
+            builder.initial_pose = sapien.Pose(p=[0, 0, cuboid_half_sizes[2]])
+            builder.set_scene_idxs([i])
+            self._cuboids.append(builder.build(name=f"cuboid-{i}"))
+            self.remove_from_state_dict_registry(self._cuboids[-1])
+        
+        # Merge all cuboids into a single batched actor
+        self.cuboid = Actor.merge(self._cuboids, name="cuboid")
+        self.add_to_state_dict_registry(self.cuboid)
+        
         self.goal_site = actors.build_sphere(
             self.scene,
             radius=self.goal_thresh,
@@ -114,6 +134,12 @@ class PickCuboidEnv(BaseEnv):
             initial_pose=sapien.Pose(),
         )
         self._hidden_objects.append(self.goal_site)
+
+    def _after_reconfigure(self, options: dict):
+        # Convert dimensions to tensor after device is set up
+        self._cuboid_half_sizes_tensor = common.to_tensor(
+            self._cuboid_half_sizes_list, device=self.device
+        )
 
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
         with torch.device(self.device):
@@ -126,8 +152,7 @@ class PickCuboidEnv(BaseEnv):
             )
             xyz[:, 0] += self.cuboid_spawn_center[0]
             xyz[:, 1] += self.cuboid_spawn_center[1]
-
-            xyz[:, 2] = self.cuboid_half_sizes[2]
+            xyz[:, 2] = self._cuboid_half_sizes_tensor[env_idx, 2]
             qs = randomization.random_quaternions(b, lock_x=True, lock_y=True)
             self.cuboid.set_pose(Pose.create_from_pq(xyz, qs))
 
