@@ -93,8 +93,8 @@ class PickCuboidEnv(BaseEnv):
         
         for i in range(self.num_envs):
             # Randomize dimensions for this environment
-            scale_x = np.random.uniform(0.5, 2.0)
-            scale_y = np.random.uniform(0.5, 2.0)
+            scale_x = np.random.uniform(0.9, 5.0)
+            scale_y = np.random.uniform(0.9, 5.0)
             cuboid_half_sizes = [
                 base_half_sizes[0] * scale_x,
                 base_half_sizes[1] * scale_y,
@@ -103,9 +103,11 @@ class PickCuboidEnv(BaseEnv):
             
             # Ensure at least one dimension is small enough to grasp
             if cuboid_half_sizes[0] >= 0.04 and cuboid_half_sizes[1] >= 0.04:
-                index = np.random.choice([0, 1])
-                cuboid_half_sizes[index] = 0.03
-            
+                # index = np.random.choice([0, 1])
+                # cuboid_half_sizes[index] = 0.03
+                min_dim = 0 if cuboid_half_sizes[0] < cuboid_half_sizes[1] else 1
+                cuboid_half_sizes[min_dim] = 0.03
+                    
             self._cuboid_half_sizes_list.append(cuboid_half_sizes)
             
             # Create cuboid for this specific environment
