@@ -15,6 +15,61 @@ from mani_skill.utils.registration import register_env
 from mani_skill.utils.scene_builder.table import TableSceneBuilder
 from mani_skill.utils.structs.actor import Actor
 from mani_skill.utils.structs.pose import Pose
+from pathlib import Path
+import os.path as osp
+from transforms3d.euler import euler2quat
+
+
+class HighFrictionTableSceneBuilder(TableSceneBuilder):
+    """Table scene builder with extremely high friction to prevent sliding"""
+    
+    def build(self):
+        builder = self.scene.create_actor_builder()
+        model_dir = Path(osp.dirname(__file__)) / ".." / ".." / ".." / "utils" / "scene_builder" / "table" / "assets"
+        table_model_file = str(model_dir / "table.glb")
+        scale = 1.75
+
+        table_pose = sapien.Pose(q=euler2quat(0, 0, np.pi / 2))
+        
+        # Create extremely high friction material for the table
+        # Using very high friction values to prevent any sliding
+        table_material = sapien.pysapien.physx.PhysxMaterial(
+            static_friction=100.0,   # Extremely high static friction
+            dynamic_friction=100.0,  # Extremely high dynamic friction
+            restitution=1.0,          # perfectly elastic
+        )
+        
+        builder.add_box_collision(
+            pose=sapien.Pose(p=[0, 0, 0.9196429 / 2]),
+            half_size=(2.418 / 2, 1.209 / 2, 0.9196429 / 2),
+            material=table_material,
+        )
+        builder.add_visual_from_file(
+            filename=table_model_file, scale=[scale] * 3, pose=table_pose
+        )
+        builder.initial_pose = sapien.Pose(
+            p=[-0.12, 0, -0.9196429], q=euler2quat(0, 0, np.pi / 2)
+        )
+        table = builder.build_kinematic(name="table-workspace")
+        aabb = (
+            table._objs[0]
+            .find_component_by_type(sapien.render.RenderBodyComponent)
+            .compute_global_aabb_tight()
+        )
+        self.table_length = aabb[1, 0] - aabb[0, 0]
+        self.table_width = aabb[1, 1] - aabb[0, 1]
+        self.table_height = aabb[1, 2] - aabb[0, 2]
+        floor_width = 100
+        if self.scene.parallel_in_single_scene:
+            floor_width = 500
+        
+        # Also give the ground high friction
+        from mani_skill.utils.building.ground import build_ground
+        self.ground = build_ground(
+            self.scene, floor_width=floor_width, altitude=-self.table_height
+        )
+        self.table = table
+        self.scene_objects = [self.table, self.ground]
 
 
 @register_env("PickCuboid-v1", max_episode_steps=50)
@@ -81,10 +136,17 @@ class PickCuboidEnv(BaseEnv):
         super()._load_agent(options, sapien.Pose(p=[-0.615, 0, 0]))
 
     def _load_scene(self, options: dict):
-        self.table_scene = TableSceneBuilder(
+        self.table_scene = HighFrictionTableSceneBuilder(
             self, robot_init_qpos_noise=self.robot_init_qpos_noise
         )
         self.table_scene.build()
+        
+        # Create high friction material for cuboid
+        cuboid_material = sapien.pysapien.physx.PhysxMaterial(
+            static_friction=100.0,  
+            dynamic_friction=100.0,  
+            restitution=0.0,         # No bouncing
+        )
         
         # Create per-environment cuboids with randomized dimensions
         base_half_sizes = self.cuboid_half_sizes.copy()
@@ -110,9 +172,10 @@ class PickCuboidEnv(BaseEnv):
                     
             self._cuboid_half_sizes_list.append(cuboid_half_sizes)
             
-            # Create cuboid for this specific environment
+            # Create cuboid for this specific environment with high friction
             builder = self.scene.create_actor_builder()
-            builder.add_box_collision(half_size=cuboid_half_sizes)
+            # builder.add_box_collision(half_size=cuboid_half_sizes)
+            builder.add_box_collision(half_size=cuboid_half_sizes, material=cuboid_material)
             builder.add_box_visual(
                 half_size=cuboid_half_sizes,
                 material=sapien.render.RenderMaterial(base_color=[1, 0, 0, 1]),
