@@ -34,9 +34,9 @@ class HighFrictionTableSceneBuilder(TableSceneBuilder):
         # Create extremely high friction material for the table
         # Using very high friction values to prevent any sliding
         table_material = sapien.pysapien.physx.PhysxMaterial(
-            static_friction=100.0,   # Extremely high static friction
-            dynamic_friction=100.0,  # Extremely high dynamic friction
-            restitution=1.0,          # perfectly elastic
+            static_friction=30,   # Extremely high static friction
+            dynamic_friction=30,
+            restitution=0.0,          # perfectly elastic
         )
         
         builder.add_box_collision(
@@ -142,11 +142,11 @@ class PickCuboidEnv(BaseEnv):
         self.table_scene.build()
         
         # Create high friction material for cuboid
-        cuboid_material = sapien.pysapien.physx.PhysxMaterial(
-            static_friction=100.0,  
-            dynamic_friction=100.0,  
-            restitution=0.0,         # No bouncing
-        )
+        # cuboid_material = sapien.pysapien.physx.PhysxMaterial(
+        #     static_friction=100.0,  
+        #     dynamic_friction=100.0,  
+        #     restitution=0.0,         # No bouncing
+        # )
         
         # Create per-environment cuboids with randomized dimensions
         base_half_sizes = self.cuboid_half_sizes.copy()
@@ -174,8 +174,8 @@ class PickCuboidEnv(BaseEnv):
             
             # Create cuboid for this specific environment with high friction
             builder = self.scene.create_actor_builder()
-            # builder.add_box_collision(half_size=cuboid_half_sizes)
-            builder.add_box_collision(half_size=cuboid_half_sizes, material=cuboid_material)
+            builder.add_box_collision(half_size=cuboid_half_sizes)
+            # builder.add_box_collision(half_size=cuboid_half_sizes, material=cuboid_material)
             builder.add_box_visual(
                 half_size=cuboid_half_sizes,
                 material=sapien.render.RenderMaterial(base_color=[1, 0, 0, 1]),
