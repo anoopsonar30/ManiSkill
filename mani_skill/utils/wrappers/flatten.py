@@ -57,6 +57,11 @@ class FlattenRGBDObservationWrapper(gym.ObservationWrapper):
             rgb_images = torch.concat(rgb_images, axis=-1)
         if len(depth_images) > 0:
             depth_images = torch.concat(depth_images, axis=-1)
+
+        # First prune the observation to not include privileged keys
+        # TODO: this is a hack that won't work for all tasks, necessarily
+        del observation["extra"]
+
         # flatten the rest of the data which should just be state data
         observation = common.flatten_state_dict(
             observation, use_torch=True, device=self.base_env.device
