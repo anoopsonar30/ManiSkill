@@ -17,3 +17,4 @@ from .roll_ball import RollBallEnv
 from .push_t import PushTEnv
 from .pull_cube_tool import PullCubeToolEnv
 from .pick_cuboid import PickCuboidEnv
+from .peg_insertion_side_hard import PegInsertionSideHardEnv
