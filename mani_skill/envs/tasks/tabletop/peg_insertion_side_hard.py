@@ -328,26 +328,26 @@ class PegInsertionSideHardEnv(BaseEnv):
         # Stage 3: Orient the grasped peg properly towards the hole
 
         # pre-insertion award, encouraging both the peg center and the peg head to match the yz coordinates of goal_pose
-        # peg_head_wrt_goal = self.goal_pose.inv() * self.peg_head_pose
-        # peg_head_wrt_goal_yz_dist = torch.linalg.norm(
-        #     peg_head_wrt_goal.p[:, 1:], axis=1
-        # )
-        # peg_wrt_goal = self.goal_pose.inv() * self.peg.pose
-        # peg_wrt_goal_yz_dist = torch.linalg.norm(peg_wrt_goal.p[:, 1:], axis=1)
+        peg_head_wrt_goal = self.goal_pose.inv() * self.peg_head_pose
+        peg_head_wrt_goal_yz_dist = torch.linalg.norm(
+            peg_head_wrt_goal.p[:, 1:], axis=1
+        )
+        peg_wrt_goal = self.goal_pose.inv() * self.peg.pose
+        peg_wrt_goal_yz_dist = torch.linalg.norm(peg_wrt_goal.p[:, 1:], axis=1)
 
-        # pre_insertion_reward = 3 * (
-        #     1
-        #     - torch.tanh(
-        #         0.5 * (peg_head_wrt_goal_yz_dist + peg_wrt_goal_yz_dist)
-        #         + 4.5 * torch.maximum(peg_head_wrt_goal_yz_dist, peg_wrt_goal_yz_dist)
-        #     )
-        # )
-        # reward += pre_insertion_reward * is_grasped
-        # # stage 3 passes if peg is correctly oriented in order to insert into hole easily
-        # pre_inserted = (peg_head_wrt_goal_yz_dist < 0.01) & (
-        #     peg_wrt_goal_yz_dist < 0.01
-        # )
-        pre_inserted = True
+        pre_insertion_reward = 3 * (
+            1
+            - torch.tanh(
+                0.5 * (peg_head_wrt_goal_yz_dist + peg_wrt_goal_yz_dist)
+                + 4.5 * torch.maximum(peg_head_wrt_goal_yz_dist, peg_wrt_goal_yz_dist)
+            )
+        )
+        reward += pre_insertion_reward * is_grasped
+        # stage 3 passes if peg is correctly oriented in order to insert into hole easily
+        pre_inserted = (peg_head_wrt_goal_yz_dist < 0.01) & (
+            peg_wrt_goal_yz_dist < 0.01
+        )
+        # pre_inserted = True
 
         # Stage 4: Insert the peg into the hole once it is grasped and lined up
         peg_head_wrt_goal_inside_hole = self.box_hole_pose.inv() * self.peg_head_pose
@@ -359,13 +359,13 @@ class PegInsertionSideHardEnv(BaseEnv):
         )
         reward += insertion_reward * (is_grasped & pre_inserted)
 
-        # reward[info["success"]] = 10
-        reward[info["success"]] = 7
+        reward[info["success"]] = 10
+        # reward[info["success"]] = 7
         
         return reward
 
     def compute_normalized_dense_reward(
         self, obs: Any, action: torch.Tensor, info: Dict
     ):
-        # return self.compute_dense_reward(obs, action, info) / 10
-        return self.compute_dense_reward(obs, action, info) / 7
+        return self.compute_dense_reward(obs, action, info) / 10
+        # return self.compute_dense_reward(obs, action, info) / 7
