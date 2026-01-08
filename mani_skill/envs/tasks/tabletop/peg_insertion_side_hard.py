@@ -44,10 +44,18 @@ def _build_box_with_hole(
     for half_size, pose in zip(half_sizes, poses):
         builder.add_box_collision(pose, half_size)
         builder.add_box_visual(pose, half_size, material=mat)
+
+    # Add back wall to close off 1/4 of the hole (making it 3/4 depth blind hole)
+    # This ensures the peg can only be inserted from one direction (negative x side)
+    back_wall_half_size = [0.25 * depth, inner_radius, inner_radius]
+    back_wall_pose = sapien.Pose([0.75 * depth, center[0], center[1]])
+    builder.add_box_collision(back_wall_pose, back_wall_half_size)
+    builder.add_box_visual(back_wall_pose, back_wall_half_size, material=mat)
+
     return builder
 
 
-@register_env("PegInsertionSideHard-v1", max_episode_steps=150)
+@register_env("PegInsertionSideHard-v2", max_episode_steps=180)
 class PegInsertionSideHardEnv(BaseEnv):
     """
     **Task Description:**
@@ -224,7 +232,7 @@ class PegInsertionSideHardEnv(BaseEnv):
                 self.device,
                 lock_x=True,
                 lock_y=True,
-                bounds=(np.pi / 2 - np.pi / 8, np.pi + np.pi / 8),
+                bounds=(-np.pi / 2, np.pi / 2),
             )
             self.box.set_pose(Pose.create_from_pq(pos, quat))
 
@@ -320,25 +328,26 @@ class PegInsertionSideHardEnv(BaseEnv):
         # Stage 3: Orient the grasped peg properly towards the hole
 
         # pre-insertion award, encouraging both the peg center and the peg head to match the yz coordinates of goal_pose
-        peg_head_wrt_goal = self.goal_pose.inv() * self.peg_head_pose
-        peg_head_wrt_goal_yz_dist = torch.linalg.norm(
-            peg_head_wrt_goal.p[:, 1:], axis=1
-        )
-        peg_wrt_goal = self.goal_pose.inv() * self.peg.pose
-        peg_wrt_goal_yz_dist = torch.linalg.norm(peg_wrt_goal.p[:, 1:], axis=1)
+        # peg_head_wrt_goal = self.goal_pose.inv() * self.peg_head_pose
+        # peg_head_wrt_goal_yz_dist = torch.linalg.norm(
+        #     peg_head_wrt_goal.p[:, 1:], axis=1
+        # )
+        # peg_wrt_goal = self.goal_pose.inv() * self.peg.pose
+        # peg_wrt_goal_yz_dist = torch.linalg.norm(peg_wrt_goal.p[:, 1:], axis=1)
 
-        pre_insertion_reward = 3 * (
-            1
-            - torch.tanh(
-                0.5 * (peg_head_wrt_goal_yz_dist + peg_wrt_goal_yz_dist)
-                + 4.5 * torch.maximum(peg_head_wrt_goal_yz_dist, peg_wrt_goal_yz_dist)
-            )
-        )
-        reward += pre_insertion_reward * is_grasped
-        # stage 3 passes if peg is correctly oriented in order to insert into hole easily
-        pre_inserted = (peg_head_wrt_goal_yz_dist < 0.01) & (
-            peg_wrt_goal_yz_dist < 0.01
-        )
+        # pre_insertion_reward = 3 * (
+        #     1
+        #     - torch.tanh(
+        #         0.5 * (peg_head_wrt_goal_yz_dist + peg_wrt_goal_yz_dist)
+        #         + 4.5 * torch.maximum(peg_head_wrt_goal_yz_dist, peg_wrt_goal_yz_dist)
+        #     )
+        # )
+        # reward += pre_insertion_reward * is_grasped
+        # # stage 3 passes if peg is correctly oriented in order to insert into hole easily
+        # pre_inserted = (peg_head_wrt_goal_yz_dist < 0.01) & (
+        #     peg_wrt_goal_yz_dist < 0.01
+        # )
+        pre_inserted = True
 
         # Stage 4: Insert the peg into the hole once it is grasped and lined up
         peg_head_wrt_goal_inside_hole = self.box_hole_pose.inv() * self.peg_head_pose
@@ -350,11 +359,13 @@ class PegInsertionSideHardEnv(BaseEnv):
         )
         reward += insertion_reward * (is_grasped & pre_inserted)
 
-        reward[info["success"]] = 10
-
+        # reward[info["success"]] = 10
+        reward[info["success"]] = 7
+        
         return reward
 
     def compute_normalized_dense_reward(
         self, obs: Any, action: torch.Tensor, info: Dict
     ):
-        return self.compute_dense_reward(obs, action, info) / 10
+        # return self.compute_dense_reward(obs, action, info) / 10
+        return self.compute_dense_reward(obs, action, info) / 7
