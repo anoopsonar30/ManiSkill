@@ -1,8 +1,11 @@
+import os
+import tempfile
 from typing import Any, Dict, Union
 
 import numpy as np
 import sapien
 import torch
+from PIL import Image, ImageDraw, ImageFont
 
 from mani_skill.agents.robots import Fetch, Panda
 from mani_skill.envs.sapien_env import BaseEnv
@@ -40,7 +43,7 @@ class StackCubeEnv(BaseEnv):
     ):
         self.robot_init_qpos_noise = robot_init_qpos_noise
         super().__init__(*args, robot_uids=robot_uids, **kwargs)
-
+    
     @property
     def _default_sensor_configs(self):
         pose = sapien_utils.look_at(eye=[0.3, 0, 0.6], target=[-0.1, 0, 0.1])
@@ -48,11 +51,64 @@ class StackCubeEnv(BaseEnv):
 
     @property
     def _default_human_render_camera_configs(self):
+        # pose = sapien_utils.look_at(eye=[0.3, 0, 0.6], target=[-0.1, 0, 0.1])
+        # return [CameraConfig("render_camera", pose, 128, 128, np.pi / 2, 0.01, 100)]
+
         pose = sapien_utils.look_at([0.6, 0.7, 0.6], [0.0, 0.0, 0.35])
         return CameraConfig("render_camera", pose, 512, 512, 1, 0.01, 100)
 
     def _load_agent(self, options: dict):
         super()._load_agent(options, sapien.Pose(p=[-0.615, 0, 0]))
+
+    def _create_label_texture(self, letter: str) -> str:
+        """Create a temporary texture image with a letter and return the file path."""
+        # Create a small image with white background
+        img_size = 256
+        img = Image.new("RGB", (img_size, img_size), color="white")
+        draw = ImageDraw.Draw(img)
+        
+        # Try to use a default font, fallback to default if not available
+        # Use smaller font size with padding to prevent cropping
+        font_size = 80
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+        except:
+            try:
+                font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
+            except:
+                font = ImageFont.load_default()
+        
+        # Get text bounding box to ensure it fits with padding
+        bbox = draw.textbbox((0, 0), letter, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        
+        # Add padding (20% margin on each side)
+        max_dimension = max(text_width, text_height)
+        padding = int(max_dimension * 0.2)
+        available_size = img_size - 2 * padding
+        
+        # Scale font if needed to fit with padding
+        if max_dimension > available_size:
+            scale_factor = available_size / max_dimension
+            font_size = int(font_size * scale_factor)
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+            except:
+                try:
+                    font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
+                except:
+                    font = ImageFont.load_default()
+        
+        # Draw black text centered using anchor='mm' (middle-middle) for proper centering
+        # This ensures the text is perfectly centered both horizontally and vertically
+        draw.text((img_size // 2, img_size // 2), letter, fill="black", font=font, anchor="mm")
+        
+        # Save to temporary file
+        fd, path = tempfile.mkstemp(suffix=".png")
+        os.close(fd)
+        img.save(path)
+        return path
 
     def _load_scene(self, options: dict):
         self.cube_half_size = common.to_tensor([0.02] * 3, device=self.device)
@@ -60,20 +116,42 @@ class StackCubeEnv(BaseEnv):
             env=self, robot_init_qpos_noise=self.robot_init_qpos_noise
         )
         self.table_scene.build()
-        self.cubeA = actors.build_cube(
-            self.scene,
-            half_size=0.02,
-            color=[1, 0, 0, 1],
-            name="cubeA",
-            initial_pose=sapien.Pose(p=[0, 0, 0.1]),
+        
+        # Build cubeA with black label on bottom
+        builder = self.scene.create_actor_builder()
+        builder.add_box_collision(half_size=[0.02] * 3)
+        builder.add_box_visual(
+            half_size=[0.02] * 3,
+            material=sapien.render.RenderMaterial(base_color=[1, 0, 0, 1]),
         )
-        self.cubeB = actors.build_cube(
-            self.scene,
-            half_size=0.02,
-            color=[0, 1, 0, 1],
-            name="cubeB",
-            initial_pose=sapien.Pose(p=[1, 0, 0.1]),
+        # Add black label on bottom face
+        builder.add_box_visual(
+            # pose=sapien.Pose(p=[0.0205, 0, 0]),  # Position on +X face (0.02 + 0.0005)
+            # half_size=[0.0001, 0.005, 0.005],  # Very thin and smaller, centered on face
+            pose=sapien.Pose(p=[0, 0, -0.0201]),  # Position on bottom face (-0.02 - 0.0001)
+            half_size=[0.005, 0.005, 0.0001],  # Very thin in Z, small in X and Y, centered on face
+            material=sapien.render.RenderMaterial(base_color=[0, 0, 0, 1]),  # Black
         )
+        builder.initial_pose = sapien.Pose(p=[0, 0, 0.1])
+        self.cubeA = builder.build(name="cubeA")
+        
+        # Build cubeB with white label on bottom
+        builder = self.scene.create_actor_builder()
+        builder.add_box_collision(half_size=[0.02] * 3)
+        builder.add_box_visual(
+            half_size=[0.02] * 3,
+            material=sapien.render.RenderMaterial(base_color=[1, 0, 0, 1]),
+        )
+        # Add white label on bottom face
+        builder.add_box_visual(
+            # pose=sapien.Pose(p=[0.0205, 0, 0]),  # Position on +X face (0.02 + 0.0005)
+            # half_size=[0.0001, 0.005, 0.005],  # Very thin and smaller, centered on face
+            pose=sapien.Pose(p=[0, 0, -0.0201]),  # Position on bottom face (-0.02 - 0.0001)
+            half_size=[0.005, 0.005, 0.0001],  # Very thin in Z, small in X and Y, centered on face
+            material=sapien.render.RenderMaterial(base_color=[1, 1, 1, 1]),  # White
+        )
+        builder.initial_pose = sapien.Pose(p=[1, 0, 0.1])
+        self.cubeB = builder.build(name="cubeB")
 
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
         with torch.device(self.device):
