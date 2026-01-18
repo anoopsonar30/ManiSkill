@@ -22,6 +22,9 @@ class TableSceneBuilder(SceneBuilder):
         builder = self.scene.create_actor_builder()
         model_dir = Path(osp.dirname(__file__)) / "assets"
         table_model_file = str(model_dir / "table.glb")
+        # Table: 58" long (X) x 28" wide (Y), converted to meters
+        table_length = 58 * 0.0254  # 1.4732m
+        table_width = 40 * 0.0254   # 0.7112m
         scale = 1.75
 
         table_pose = sapien.Pose(q=euler2quat(0, 0, np.pi / 2))
@@ -32,7 +35,7 @@ class TableSceneBuilder(SceneBuilder):
         # )
         builder.add_box_collision(
             pose=sapien.Pose(p=[0, 0, 0.9196429 / 2]),
-            half_size=(2.418 / 2, 1.209 / 2, 0.9196429 / 2),
+            half_size=(table_length / 2, table_width / 2, 0.9196429 / 2),
         )
         builder.add_visual_from_file(
             filename=table_model_file, scale=[scale] * 3, pose=table_pose
@@ -94,7 +97,10 @@ class TableSceneBuilder(SceneBuilder):
                 )
             qpos[:, -2:] = 0.04
             self.env.agent.reset(qpos)
-            self.env.agent.robot.set_pose(sapien.Pose([-0.615, 0, 0]))
+            # Robot base: 7" from back edge, 14" from +Y edge of table
+            robot_x = -0.615 + 7 * 0.0254      # -0.4372m
+            robot_y = 1.200032 - 14 * 0.0254   # 0.8444m
+            self.env.agent.robot.set_pose(sapien.Pose([robot_x, robot_y, 0]))
         elif self.env.robot_uids == "panda_wristcam":
             # fmt: off
             qpos = np.array(
