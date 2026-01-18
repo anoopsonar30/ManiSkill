@@ -14,6 +14,15 @@ from mani_skill.utils.building import actors
 from mani_skill.utils.registration import register_env
 from mani_skill.utils.scene_builder.table import TableSceneBuilder
 from mani_skill.utils.structs.pose import Pose
+from scipy.spatial.transform import Rotation as R
+
+
+camera_data = "/home/jmarangola/mdpo/assets/calibration_data.npz"
+camera_data = np.load(camera_data)
+REAL_POSE = np.eye(4)
+REAL_POSE[:3, 3] = camera_data["translations"]
+REAL_POSE[:3, :3] = (R.from_matrix(camera_data["rotations"]) * R.from_euler('zyx', [90, 0, 90], degrees=True)).as_matrix()
+INTRINSICS_REAL = camera_data["K"]
 
 
 @register_env("PickCube-v1", max_episode_steps=50)
@@ -65,10 +74,19 @@ class PickCubeEnv(BaseEnv):
 
     @property
     def _default_sensor_configs(self):
-        pose = sapien_utils.look_at(
-            eye=self.sensor_cam_eye_pos, target=self.sensor_cam_target_pos
+        # pose = sapien_utils.look_at(
+        #     eye=self.sensor_cam_eye_pos, target=self.sensor_cam_target_pos
+        # )
+        # return [CameraConfig("base_camera", pose, 128, 128, np.pi / 2, 0.01, 100)]
+        return CameraConfig(
+            "base_camera", 
+            sapien.Pose(REAL_POSE),
+            224, 224, 
+            # intrinsic=torch.from_numpy(INTRINSICS_REAL),
+            fov=np.pi/2, near=0.01, far=100,
+            mount=self.agent.robot.links[0], 
         )
-        return [CameraConfig("base_camera", pose, 128, 128, np.pi / 2, 0.01, 100)]
+
 
     @property
     def _default_human_render_camera_configs(self):
