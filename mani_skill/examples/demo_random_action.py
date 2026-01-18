@@ -83,7 +83,7 @@ def main(args: Args):
         if len(env_kwargs["robot_uids"]) == 1:
             env_kwargs["robot_uids"] = env_kwargs["robot_uids"][0]
     env: BaseEnv = gym.make(
-        args.env_id,
+        args.env_id, 
         **env_kwargs
     )
     record_dir = args.record_dir
