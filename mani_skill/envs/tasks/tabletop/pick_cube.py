@@ -40,6 +40,8 @@ REAL_POSE = np.eye(4)
 REAL_POSE[:3, 3] = camera_data["translations"]
 REAL_POSE[:3, :3] = (R.from_matrix(camera_data["rotations"]) * R.from_euler('zyx', [90, 0, 90], degrees=True)).as_matrix()
 INTRINSICS_REAL = camera_data["K"]
+INTRINSICS_REAL[:-1] *= 224.0 / 720.0 # adjustment factor after centercropping
+
 
 
 @register_env("PickCube-v1", max_episode_steps=50)
@@ -99,8 +101,9 @@ class PickCubeEnv(BaseEnv):
             "base_camera", 
             sapien.Pose(REAL_POSE),
             224, 224, 
-            # intrinsic=torch.from_numpy(INTRINSICS_REAL),
-            fov=np.pi/2, near=0.01, far=100,
+            intrinsic=torch.from_numpy(INTRINSICS_REAL),
+            #fov=np.pi/2, 
+            near=0.01, far=100,
             mount=self.agent.robot.links[0], 
         )
 
@@ -249,11 +252,11 @@ class PickCubeEnv(BaseEnv):
         self._hidden_objects.append(self.goal_site)
 
     def _load_lighting(self, options: Dict):
-        # self.scene.set_ambient_light(np.array([1,1,1])*0.05)
         for i in range(self.num_envs):
             self.scene.sub_scenes[i].set_environment_map(EXRS_DOME_LIGHTINGS[self._batched_episode_rng[i].randint(0, len(EXRS_DOME_LIGHTINGS))])
-        self.scene.set_ambient_light(np.array([1,1,1])*0.1)
-        # self.scene.add_directional_light(
+        # self.scene.set_ambient_light(np.array([1,1,1])*0.05)
+        
+        self.scene.set_ambient_light(np.array([1,1,1])) * np.random.uniform(0.05, 0.2)
         #     [0.3, 0.3, -1], [1, 1, 1], shadow=True, shadow_scale=5, shadow_map_size=2048
         # )
 
@@ -268,7 +271,6 @@ class PickCubeEnv(BaseEnv):
 
             # TODO: randomize quick physics parameters (friction, coef resitution, intertia, mass, etc.)
 
-            # TODO: turn shadows off
             #             
             # Spawn cube on the table, 14" in front of robot base
             # Robot base is at: x = -0.615 + 7*0.0254 = -0.4372, y = 1.200032 - 14*0.0254 = 0.8444
