@@ -1,8 +1,15 @@
 from typing import Any, Dict, Union
+from pathlib import Path
+import os.path as osp
+import glob
 
 import numpy as np
 import sapien
+import sapien.render
+import os
 import torch
+from transforms3d.euler import euler2quat
+from sapien.render import RenderBodyComponent
 
 import mani_skill.envs.utils.randomization as randomization
 from mani_skill.agents.robots import SO100, Fetch, Panda, XArm6Robotiq
@@ -11,11 +18,21 @@ from mani_skill.envs.tasks.tabletop.pick_cube_cfgs import PICK_CUBE_CONFIGS
 from mani_skill.sensors.camera import CameraConfig
 from mani_skill.utils import sapien_utils
 from mani_skill.utils.building import actors
+from mani_skill.utils.building.ground import build_ground
 from mani_skill.utils.registration import register_env
 from mani_skill.utils.scene_builder.table import TableSceneBuilder
+from mani_skill.utils.structs.actor import Actor
 from mani_skill.utils.structs.pose import Pose
 from scipy.spatial.transform import Rotation as R
 
+# Load table texture files for domain randomization
+TABLE_TEXTURE_DIR = Path("/home/jmarangola/mdpo/assets/curated_table_textures")
+TABLE_TEXTURES = sorted(glob.glob(str(TABLE_TEXTURE_DIR / "*.png")))
+print(f"### Loaded {len(TABLE_TEXTURES)} curated table textures")
+
+EXRS_DOME_LIGHTING_DIR = Path("/home/jmarangola/mdpo/assets/dome_light_textures")
+EXRS_DOME_LIGHTINGS = sorted(glob.glob(str(EXRS_DOME_LIGHTING_DIR / "*.exr")))
+print(f"### Loaded {len(EXRS_DOME_LIGHTINGS)} curated dome lighting textures")
 
 camera_data = "/home/jmarangola/mdpo/assets/calibration_data.npz"
 camera_data = np.load(camera_data)
@@ -99,17 +116,126 @@ class PickCubeEnv(BaseEnv):
         super()._load_agent(options, sapien.Pose(p=[-0.615, 0, 0]))
 
     def _load_scene(self, options: dict):
+        # Build tables and cubes separately per environment for domain randomization support
+        # This allows each parallel environment to have different physical/visual materials
+        
+        # Table configuration
+        model_dir = Path(osp.dirname(__file__)).parent.parent.parent / "utils" / "scene_builder" / "table" / "assets"
+        table_model_file = str(model_dir / "table.glb")
+        scale = 1.75
+        # Base table dimensions (before scaling)
+        base_table_length = 58 * 0.0254  # 1.4732m
+        base_table_width = 40 * 0.0254   # 0.7112m
+        base_table_height = 0.9196429
+        # Scale collision box to match visual model scale
+        table_length = base_table_length * scale  # 2.578m
+        table_width = base_table_width * scale    # 1.245m
+        table_height = base_table_height * scale  # 1.609m
+        table_pose = sapien.Pose(q=euler2quat(0, 0, np.pi / 2))
+        table_initial_pose = sapien.Pose(p=[-0.12, 0, -table_height], q=euler2quat(0, 0, np.pi / 2))
+        
+        # Build separate tables for each environment
+        tables = []
+        for i in range(self.num_envs):
+            builder = self.scene.create_actor_builder()
+            builder.add_box_collision(
+                pose=sapien.Pose(p=[0, 0, 0.9196429 / 2]),
+                half_size=(table_length / 2, table_width / 2, 0.9196429 / 2),
+            )
+            builder.add_visual_from_file(
+                filename=table_model_file, scale=[scale] * 3, pose=table_pose
+            )
+            builder.initial_pose = table_initial_pose
+            builder.set_scene_idxs([i])
+            table = builder.build_kinematic(name=f"table-workspace_{i}")
+            self.remove_from_state_dict_registry(table)
+            tables.append(table)
+        
+        self.table = Actor.merge(tables, name="table-workspace")
+        self.add_to_state_dict_registry(self.table)
+        
+        # Apply random textures to each table
+        for i, obj in enumerate(self.table._objs):
+            # Sample a random texture for this table
+            texture_idx = self._batched_episode_rng[i].randint(0, len(TABLE_TEXTURES))
+            texture_path = TABLE_TEXTURES[texture_idx]
+            texture = sapien.render.RenderTexture2D(
+                filename=texture_path,
+                mipmap_levels=1,
+            )
+            
+            # Apply texture to all render parts of the table
+            render_body_component: RenderBodyComponent = obj.find_component_by_type(RenderBodyComponent)
+            if render_body_component is not None:
+                for render_shape in render_body_component.render_shapes:
+                    for part in render_shape.parts:
+                        part.material.set_base_color([1, 1, 1, 1])  # Reset base color to white so texture shows properly
+                        part.material.set_base_color_texture(texture)
+                        # Reset material properties to avoid dark appearance from original .glb materials
+                        part.material.set_metallic(0.0)  # Non-metallic for diffuse texture appearance
+                        part.material.set_roughness(0.8)  # Mostly matte surface
+                        part.material.set_specular(0.0)  # Reduce specular highlights
+                        part.material.set_normal_texture(None)
+                        part.material.set_metallic_texture(None)
+                        part.material.set_roughness_texture(None)
+                        part.material.set_emission_texture(None)
+        
+        # Compute table dimensions from first table for reference
+        aabb = (
+            tables[0]._objs[0]
+            .find_component_by_type(sapien.render.RenderBodyComponent)
+            .compute_global_aabb_tight()
+        )
+        self.table_length = aabb[1, 0] - aabb[0, 0]
+        self.table_width = aabb[1, 1] - aabb[0, 1]
+        self.table_height = aabb[1, 2] - aabb[0, 2]
+        
+        # Build ground (shared across all environments) - collision only, no visual
+        floor_width = 100
+        if self.scene.parallel_in_single_scene:
+            floor_width = 500
+        self.ground = build_ground(
+            self.scene, floor_width=floor_width, altitude=-self.table_height
+        )
+        # Hide the ground visual (grid texture) - keep collision for physics
+        for obj in self.ground._objs:
+            render_comp = obj.find_component_by_type(RenderBodyComponent)
+            if render_comp is not None:
+                obj.remove_component(render_comp)
+        
+        # Store table scene reference for compatibility and use TableSceneBuilder for robot initialization
         self.table_scene = TableSceneBuilder(
             self, robot_init_qpos_noise=self.robot_init_qpos_noise
         )
-        self.table_scene.build()
-        self.cube = actors.build_cube(
-            self.scene,
-            half_size=self.cube_half_size,
-            color=[1, 0, 0, 1],
-            name="cube",
-            initial_pose=sapien.Pose(p=[0, 0, self.cube_half_size]),
-        )
+        # Override table_scene's table and ground with our per-env versions
+        self.table_scene.table = self.table
+        self.table_scene.ground = self.ground
+        self.table_scene.table_height = self.table_height
+        self.table_scene.table_length = self.table_length
+        self.table_scene.table_width = self.table_width
+        self.table_scene.scene_objects = [self.table, self.ground]
+        
+        # Build separate cubes for each environment
+        cubes = []
+        for i in range(self.num_envs):
+            builder = self.scene.create_actor_builder()
+            builder.add_box_collision(half_size=[self.cube_half_size] * 3)
+            builder.add_box_visual(
+                half_size=[self.cube_half_size] * 3,
+                material=sapien.render.RenderMaterial(
+                    base_color=[0, 0, 0, 1],
+                ),
+            )
+            builder.initial_pose = sapien.Pose(p=[0, 0, self.cube_half_size])
+            builder.set_scene_idxs([i])
+            cube = builder.build(name=f"cube_{i}")
+            self.remove_from_state_dict_registry(cube)
+            cubes.append(cube)
+        
+        self.cube = Actor.merge(cubes, name="cube")
+        self.add_to_state_dict_registry(self.cube)
+        
+        # Goal site (shared, as it's just a visual marker)
         self.goal_site = actors.build_sphere(
             self.scene,
             radius=self.goal_thresh,
@@ -119,21 +245,45 @@ class PickCubeEnv(BaseEnv):
             add_collision=False,
             initial_pose=sapien.Pose(),
         )
+        # TODO: need to add randomization of background image by segmenting the background 
         self._hidden_objects.append(self.goal_site)
+
+    def _load_lighting(self, options: Dict):
+        # self.scene.set_ambient_light(np.array([1,1,1])*0.05)
+        for i in range(self.num_envs):
+            self.scene.sub_scenes[i].set_environment_map(EXRS_DOME_LIGHTINGS[self._batched_episode_rng[i].randint(0, len(EXRS_DOME_LIGHTINGS))])
+        self.scene.set_ambient_light(np.array([1,1,1])*0.1)
+        # self.scene.add_directional_light(
+        #     [0.3, 0.3, -1], [1, 1, 1], shadow=True, shadow_scale=5, shadow_map_size=2048
+        # )
 
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
         with torch.device(self.device):
             b = len(env_idx)
             self.table_scene.initialize(env_idx)
-            xyz = torch.zeros((b, 3))
-            xyz[:, :2] = (
-                torch.rand((b, 2)) * self.cube_spawn_half_size * 2
-                - self.cube_spawn_half_size
-            )
-            xyz[:, 0] += self.cube_spawn_center[0]
-            xyz[:, 1] += self.cube_spawn_center[1]
 
-            xyz[:, 2] = self.cube_half_size
+            # TODO: randomize lighting
+
+            # TODO: randomize camera pose
+
+            # TODO: randomize quick physics parameters (friction, coef resitution, intertia, mass, etc.)
+
+            # TODO: turn shadows off
+            #             
+            # Spawn cube on the table, 14" in front of robot base
+            # Robot base is at: x = -0.615 + 7*0.0254 = -0.4372, y = 1.200032 - 14*0.0254 = 0.8444
+            # Robot faces +X direction (toward table center), so 14" in front = +X offset
+            robot_base_x = -0.615 + 7 * 0.0254   # -0.4372m
+            robot_base_y = 1.200032 - 14 * 0.0254  # 0.8444m
+            cube_spawn_center_x = robot_base_x + 14 * 0.0254  # 14" in front of robot (+X direction)
+            cube_spawn_center_y = robot_base_y  # Same Y as robot base
+            
+            xyz = torch.zeros((b, 3))
+            cube_spawn_half_size = 0.2  # ±20cm range for cube position randomization
+            xyz[:, 0] = cube_spawn_center_x + (torch.rand((b,)) * 2 - 1) * cube_spawn_half_size
+            xyz[:, 1] = cube_spawn_center_y + (torch.rand((b,)) * 2 - 1) * cube_spawn_half_size
+            xyz[:, 2] = self.cube_half_size  # On table surface
+            
             qs = randomization.random_quaternions(b, lock_x=True, lock_y=True)
             self.cube.set_pose(Pose.create_from_pq(xyz, qs))
 
