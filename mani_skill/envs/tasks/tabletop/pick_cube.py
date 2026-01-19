@@ -256,7 +256,7 @@ class PickCubeEnv(BaseEnv):
             self.scene.sub_scenes[i].set_environment_map(EXRS_DOME_LIGHTINGS[self._batched_episode_rng[i].randint(0, len(EXRS_DOME_LIGHTINGS))])
         # self.scene.set_ambient_light(np.array([1,1,1])*0.05)
         
-        self.scene.set_ambient_light(np.array([1,1,1])) * np.random.uniform(0.05, 0.2)
+        self.scene.set_ambient_light(np.array([1,1,1]) * np.random.uniform(0.05, 0.2))
         #     [0.3, 0.3, -1], [1, 1, 1], shadow=True, shadow_scale=5, shadow_map_size=2048
         # )
 
