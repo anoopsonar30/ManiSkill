@@ -289,14 +289,11 @@ class PickCubeEnv(BaseEnv):
             qs = randomization.random_quaternions(b, lock_x=True, lock_y=True)
             self.cube.set_pose(Pose.create_from_pq(xyz, qs))
 
+            # Fixed goal position: 14" in front of robot, 300mm above table, same Y as robot base
             goal_xyz = torch.zeros((b, 3))
-            goal_xyz[:, :2] = (
-                torch.rand((b, 2)) * self.cube_spawn_half_size * 2
-                - self.cube_spawn_half_size
-            )
-            goal_xyz[:, 0] += self.cube_spawn_center[0]
-            goal_xyz[:, 1] += self.cube_spawn_center[1]
-            goal_xyz[:, 2] = torch.rand((b)) * self.max_goal_height + xyz[:, 2]
+            goal_xyz[:, 0] = robot_base_x + 14 * 0.0254  # 14" in front of robot (+X direction)
+            goal_xyz[:, 1] = robot_base_y  # Same Y as robot base
+            goal_xyz[:, 2] = 0.3  # 300mm above table surface
             self.goal_site.set_pose(Pose.create_from_pq(goal_xyz))
 
     def _get_obs_extra(self, info: Dict):
