@@ -26,15 +26,17 @@ from mani_skill.utils.structs.pose import Pose
 from scipy.spatial.transform import Rotation as R
 
 # Load table texture files for domain randomization
-TABLE_TEXTURE_DIR = Path("/home/jmarangola/mdpo/assets/curated_table_textures")
+
+import pdb;pdb.set_trace()
+TABLE_TEXTURE_DIR = Path(os.getcwd()) / "assets/curated_table_textures"
 TABLE_TEXTURES = sorted(glob.glob(str(TABLE_TEXTURE_DIR / "*.png")))
 print(f"### Loaded {len(TABLE_TEXTURES)} curated table textures")
 
-EXRS_DOME_LIGHTING_DIR = Path("/home/jmarangola/mdpo/assets/dome_light_textures")
+EXRS_DOME_LIGHTING_DIR = Path(os.getcwd()) / "assets/dome_light_textures"
 EXRS_DOME_LIGHTINGS = sorted(glob.glob(str(EXRS_DOME_LIGHTING_DIR / "*.exr")))
 print(f"### Loaded {len(EXRS_DOME_LIGHTINGS)} curated dome lighting textures")
 
-camera_data = "/home/jmarangola/mdpo/assets/calibration_data.npz"
+camera_data = Path(os.getcwd()) / "assets/calibration_data.npz"
 camera_data = np.load(camera_data)
 REAL_POSE = np.eye(4)
 REAL_POSE[:3, 3] = camera_data["translations"]
