@@ -16,16 +16,17 @@ from mani_skill.utils.structs.actor import Actor
 @register_agent()
 class Panda(BaseAgent):
     uid = "panda"
-    urdf_path = f"{PACKAGE_ASSET_DIR}/robots/panda/panda_v2.urdf"
+    # urdf_path = f"{PACKAGE_ASSET_DIR}/robots/panda/panda_v2.urdf"
+    urdf_path = f"{PACKAGE_ASSET_DIR}/robots/fr3/fr3_franka_hand.urdf"
     urdf_config = dict(
         _materials=dict(
             gripper=dict(static_friction=2.0, dynamic_friction=2.0, restitution=0.0)
         ),
         link=dict(
-            panda_leftfinger=dict(
+            fr3_leftfinger=dict(
                 material="gripper", patch_radius=0.1, min_patch_radius=0.1
             ),
-            panda_rightfinger=dict(
+            fr3_rightfinger=dict(
                 material="gripper", patch_radius=0.1, min_patch_radius=0.1
             ),
         ),
@@ -51,19 +52,19 @@ class Panda(BaseAgent):
     )
 
     arm_joint_names = [
-        "panda_joint1",
-        "panda_joint2",
-        "panda_joint3",
-        "panda_joint4",
-        "panda_joint5",
-        "panda_joint6",
-        "panda_joint7",
+        "fr3_joint1",
+        "fr3_joint2",
+        "fr3_joint3",
+        "fr3_joint4",
+        "fr3_joint5",
+        "fr3_joint6",
+        "fr3_joint7",
     ]
     gripper_joint_names = [
-        "panda_finger_joint1",
-        "panda_finger_joint2",
+        "fr3_finger_joint1",
+        "fr3_finger_joint2",
     ]
-    ee_link_name = "panda_hand_tcp"
+    ee_link_name = "fr3_hand_tcp"
 
     arm_stiffness = 1e3
     arm_damping = 1e2
@@ -181,7 +182,7 @@ class Panda(BaseAgent):
             stiffness=self.gripper_stiffness,
             damping=self.gripper_damping,
             force_limit=self.gripper_force_limit,
-            mimic={"panda_finger_joint2": {"joint": "panda_finger_joint1"}},
+            mimic={"fr3_finger_joint2": {"joint": "fr3_finger_joint1"}},
         )
 
         controller_configs = dict(
@@ -219,16 +220,16 @@ class Panda(BaseAgent):
 
     def _after_init(self):
         self.finger1_link = sapien_utils.get_obj_by_name(
-            self.robot.get_links(), "panda_leftfinger"
+            self.robot.get_links(), "fr3_leftfinger"
         )
         self.finger2_link = sapien_utils.get_obj_by_name(
-            self.robot.get_links(), "panda_rightfinger"
+            self.robot.get_links(), "fr3_rightfinger"
         )
         self.finger1pad_link = sapien_utils.get_obj_by_name(
-            self.robot.get_links(), "panda_leftfinger_pad"
+            self.robot.get_links(), "fr3_leftfinger_pad"
         )
         self.finger2pad_link = sapien_utils.get_obj_by_name(
-            self.robot.get_links(), "panda_rightfinger_pad"
+            self.robot.get_links(), "fr3_rightfinger_pad"
         )
         self.tcp = sapien_utils.get_obj_by_name(
             self.robot.get_links(), self.ee_link_name
@@ -278,7 +279,7 @@ class Panda(BaseAgent):
 
     @staticmethod
     def build_grasp_pose(approaching, closing, center):
-        """Build a grasp pose (panda_hand_tcp)."""
+        """Build a grasp pose (fr3_hand_tcp)."""
         assert np.abs(1 - np.linalg.norm(approaching)) < 1e-3
         assert np.abs(1 - np.linalg.norm(closing)) < 1e-3
         assert np.abs(approaching @ closing) <= 1e-3
