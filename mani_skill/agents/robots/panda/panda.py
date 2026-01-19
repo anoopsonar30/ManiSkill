@@ -1,4 +1,6 @@
 from copy import deepcopy
+import os
+from pathlib import Path
 
 import numpy as np
 import sapien
@@ -11,6 +13,10 @@ from mani_skill.agents.controllers import *
 from mani_skill.agents.registration import register_agent
 from mani_skill.utils import common, sapien_utils
 from mani_skill.utils.structs.actor import Actor
+from real.s2r_maniskill_util import apply_sysid_to_robot
+
+# SYSID for all fr3 tasks.
+SYSTEM_IDENTIFICATION_JSON_PATH = Path(os.getcwd()) / "assets/system_identification/K128_D8/best_seed42.json"
 
 
 @register_agent()
@@ -73,6 +79,13 @@ class Panda(BaseAgent):
     gripper_stiffness = 1e3
     gripper_damping = 1e2
     gripper_force_limit = 100
+
+    def _after_loading_articulation(self):
+        """Apply system identification parameters after loading the robot."""
+        assert SYSTEM_IDENTIFICATION_JSON_PATH.exists(), f"System identification JSON path {SYSTEM_IDENTIFICATION_JSON_PATH} does not exist"
+
+        apply_sysid_to_robot(self.robot, joint_num=7, json_path=str(SYSTEM_IDENTIFICATION_JSON_PATH))
+        print(f"[Panda] Applied sysid from {SYSTEM_IDENTIFICATION_JSON_PATH}")
 
     @property
     def _controller_configs(self):

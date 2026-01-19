@@ -25,9 +25,8 @@ from mani_skill.utils.structs.actor import Actor
 from mani_skill.utils.structs.pose import Pose
 from scipy.spatial.transform import Rotation as R
 
-# Load table texture files for domain randomization
 
-import pdb;pdb.set_trace()
+# Load table texture files for domain randomization
 TABLE_TEXTURE_DIR = Path(os.getcwd()) / "assets/curated_table_textures"
 TABLE_TEXTURES = sorted(glob.glob(str(TABLE_TEXTURE_DIR / "*.png")))
 print(f"### Loaded {len(TABLE_TEXTURES)} curated table textures")
