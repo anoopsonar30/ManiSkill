@@ -98,28 +98,40 @@ class PickCubeEnv(BaseEnv):
         #     eye=self.sensor_cam_eye_pos, target=self.sensor_cam_target_pos
         # )
         # return [CameraConfig("base_camera", pose, 128, 128, np.pi / 2, 0.01, 100)]
+        
+        # Camera is mounted on cam_mount (kinematic actor) with identity local pose.
+        # The cam_mount pose is set in _initialize_episode to be relative to link_0
+        # with random perturbations applied each episode.
         return CameraConfig(
             "base_camera", 
-            sapien.Pose(REAL_POSE),
+            sapien.Pose(),  # Identity local pose; world pose set via cam_mount
             224, 224, 
             intrinsic=torch.from_numpy(INTRINSICS_REAL),
-            #fov=np.pi/2, 
             near=0.01, far=100,
-            mount=self.agent.robot.links[0], 
+            mount=self.cam_mount, 
         )
 
 
     @property
     def _default_human_render_camera_configs(self):
-        pose = sapien_utils.look_at(
-            eye=self.human_cam_eye_pos, target=self.human_cam_target_pos
-        )
-        return CameraConfig("render_camera", pose, 512, 512, 1, 0.01, 100)
+        return self._default_sensor_configs
+        # pose = sapien_utils.look_at(
+        #     eye=self.human_cam_eye_pos, target=self.human_cam_target_pos
+        # )
+        # return CameraConfig("render_camera", pose, 512, 512, 1, 0.01, 100)
 
     def _load_agent(self, options: dict):
         super()._load_agent(options, sapien.Pose(p=[-0.615, 0, 0]))
 
     def _load_scene(self, options: dict):
+        # Create camera mount actor for episodic camera pose randomization
+        # Robot initial pose from _load_agent (link poses not available yet during _load_scene)
+        robot_initial_pose = sapien.Pose(p=[-0.615, 0, 0])
+        cam_initial_pose = robot_initial_pose * sapien.Pose(REAL_POSE)
+        cam_mount_builder = self.scene.create_actor_builder()
+        cam_mount_builder.initial_pose = cam_initial_pose
+        self.cam_mount = cam_mount_builder.build_kinematic("camera_mount")
+        
         # Build tables and cubes separately per environment for domain randomization support
         # This allows each parallel environment to have different physical/visual materials
         
@@ -253,6 +265,7 @@ class PickCubeEnv(BaseEnv):
         self._hidden_objects.append(self.goal_site)
 
     def _load_lighting(self, options: Dict):
+        print("Loading EXR Dome lighting with ambient randomization preset")
         for i in range(self.num_envs):
             self.scene.sub_scenes[i].set_environment_map(EXRS_DOME_LIGHTINGS[self._batched_episode_rng[i].randint(0, len(EXRS_DOME_LIGHTINGS))])
         # self.scene.set_ambient_light(np.array([1,1,1])*0.05)
@@ -266,9 +279,33 @@ class PickCubeEnv(BaseEnv):
             b = len(env_idx)
             self.table_scene.initialize(env_idx)
 
-            # TODO: randomize lighting
+            # TODO: randomize lighting a bit more
 
-            # TODO: randomize camera pose
+            # Randomize camera pose relative to robot base (link_0)
+            # Start with link_0's world pose
+            link0_pose = self.agent.robot.links[0].pose
+            
+            # Apply nominal camera pose (REAL_POSE) relative to link_0
+            nominal_pose = Pose.create(sapien.Pose(REAL_POSE))
+            cam_pose = link0_pose * nominal_pose
+            
+            # Apply random perturbation: position ±1cm, rotation up to ±3 degrees
+            # Sample random rotation axis (uniform on S²) and angle (uniform in [-max, +max])
+            max_angle = np.deg2rad(3)
+            axes = np.random.randn(self.num_envs, 3)
+            axes /= np.linalg.norm(axes, axis=1, keepdims=True)
+            angles = np.random.uniform(-max_angle, max_angle, size=(self.num_envs, 1))
+            rotvecs = axes * angles
+            delta_quats = R.from_rotvec(rotvecs).as_quat()
+            delta_quats = np.roll(delta_quats, 1, axis=1)
+            delta_positions = np.random.uniform(-0.01, 0.01, size=(self.num_envs, 3))
+            # Create perturbation pose and apply to camera pose
+            perturbation = Pose.create_from_pq(
+                p=torch.from_numpy(delta_positions).float().to(self.device),
+                q=torch.from_numpy(delta_quats).float().to(self.device),
+            )
+            cam_pose = cam_pose * perturbation
+            self.cam_mount.set_pose(cam_pose)
 
             # TODO: randomize quick physics parameters (friction, coef resitution, intertia, mass, etc.)
 
