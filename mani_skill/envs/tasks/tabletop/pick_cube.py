@@ -281,24 +281,22 @@ class PickCubeEnv(BaseEnv):
 
             # TODO: randomize lighting a bit more
 
-            # Randomize camera pose relative to robot base (link_0)
-            # Start with link_0's world pose
-            link0_pose = self.agent.robot.links[0].pose
+            
+            link0_pose = self.agent.robot.links[0].pose[env_idx]
             
             # Apply nominal camera pose (REAL_POSE) relative to link_0
             nominal_pose = Pose.create(sapien.Pose(REAL_POSE))
             cam_pose = link0_pose * nominal_pose
             
             # Apply random perturbation: position ±1cm, rotation up to ±3 degrees
-            # Sample random rotation axis (uniform on S²) and angle (uniform in [-max, +max])
             max_angle = np.deg2rad(3)
-            axes = np.random.randn(self.num_envs, 3)
+            axes = np.random.randn(b, 3)
             axes /= np.linalg.norm(axes, axis=1, keepdims=True)
-            angles = np.random.uniform(-max_angle, max_angle, size=(self.num_envs, 1))
+            angles = np.random.uniform(-max_angle, max_angle, size=(b, 1))
             rotvecs = axes * angles
             delta_quats = R.from_rotvec(rotvecs).as_quat()
             delta_quats = np.roll(delta_quats, 1, axis=1)
-            delta_positions = np.random.uniform(-0.01, 0.01, size=(self.num_envs, 3))
+            delta_positions = np.random.uniform(-0.01, 0.01, size=(b, 3))
             # Create perturbation pose and apply to camera pose
             perturbation = Pose.create_from_pq(
                 p=torch.from_numpy(delta_positions).float().to(self.device),
