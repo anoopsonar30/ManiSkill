@@ -114,11 +114,14 @@ class PickCubeEnv(BaseEnv):
 
     @property
     def _default_human_render_camera_configs(self):
-        return self._default_sensor_configs
-        # pose = sapien_utils.look_at(
-        #     eye=self.human_cam_eye_pos, target=self.human_cam_target_pos
-        # )
-        # return CameraConfig("render_camera", pose, 512, 512, 1, 0.01, 100)
+        # Human camera positioned to view the robot arm, cube, and goal area
+        # Robot is at (-0.615, 0, 0), workspace is around (-0.08, 0.84)
+        # Camera placed at elevated position looking at the workspace center
+        pose = sapien_utils.look_at(
+            eye=[0.4, 1.6, 0.8],  # Elevated, to the right side of workspace
+            target=[-0.2, 0.6, 0.1]  # Center of action (between robot and cube area)
+        )
+        return CameraConfig("render_camera", pose, 512, 512, fov=1, near=0.01, far=100)
 
     def _load_agent(self, options: dict):
         super()._load_agent(options, sapien.Pose(p=[-0.615, 0, 0]))
@@ -281,7 +284,7 @@ class PickCubeEnv(BaseEnv):
 
             # TODO: randomize lighting a bit more
 
-            
+
             link0_pose = self.agent.robot.links[0].pose[env_idx]
             
             # Apply nominal camera pose (REAL_POSE) relative to link_0
@@ -317,7 +320,7 @@ class PickCubeEnv(BaseEnv):
             cube_spawn_center_y = robot_base_y  # Same Y as robot base
             
             xyz = torch.zeros((b, 3))
-            cube_spawn_half_size = 0.2  # ±20cm range for cube position randomization
+            cube_spawn_half_size = 0.1  # ±10cm range (matches original ManiSkill ±0.1m randomization)
             xyz[:, 0] = cube_spawn_center_x + (torch.rand((b,)) * 2 - 1) * cube_spawn_half_size
             xyz[:, 1] = cube_spawn_center_y + (torch.rand((b,)) * 2 - 1) * cube_spawn_half_size
             xyz[:, 2] = self.cube_half_size  # On table surface
@@ -329,7 +332,7 @@ class PickCubeEnv(BaseEnv):
             goal_xyz = torch.zeros((b, 3))
             goal_xyz[:, 0] = robot_base_x + 14 * 0.0254  # 14" in front of robot (+X direction)
             goal_xyz[:, 1] = robot_base_y  # Same Y as robot base
-            goal_xyz[:, 2] = 0.3  # 300mm above table surface
+            goal_xyz[:, 2] = 0.15  # 300mm above table surface
             self.goal_site.set_pose(Pose.create_from_pq(goal_xyz))
 
     def _get_obs_extra(self, info: Dict):
