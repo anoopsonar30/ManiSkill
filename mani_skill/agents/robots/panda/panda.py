@@ -103,8 +103,8 @@ class Panda(BaseAgent):
         )
         arm_pd_joint_delta_pos = PDJointPosControllerConfig(
             self.arm_joint_names,
-            lower=-0.1,
-            upper=0.1,
+            lower=-0.05,
+            upper=0.05,
             stiffness=self.arm_stiffness,
             damping=self.arm_damping,
             force_limit=self.arm_force_limit,
