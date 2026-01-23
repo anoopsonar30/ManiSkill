@@ -47,7 +47,7 @@ def _build_box_with_hole(
     return builder
 
 
-@register_env("PegInsertionSide-v1", max_episode_steps=100)
+@register_env("PegInsertionSide-v1", max_episode_steps=200)
 class PegInsertionSideEnv(BaseEnv):
     """
     **Task Description:**
