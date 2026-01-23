@@ -330,7 +330,7 @@ class PickCubeEnv(BaseEnv):
 
             # Fixed goal position: 14" in front of robot, 300mm above table, same Y as robot base
             goal_xyz = torch.zeros((b, 3))
-            goal_xyz[:, 0] = robot_base_x + 14 * 0.0254  # 14" in front of robot (+X direction)
+            goal_xyz[:, 0] = robot_base_x + 23 * 0.0254  # 21" in front of robot (+X direction)
             goal_xyz[:, 1] = robot_base_y  # Same Y as robot base
             goal_xyz[:, 2] = 0.15  # 300mm above table surface
             self.goal_site.set_pose(Pose.create_from_pq(goal_xyz))
