@@ -364,7 +364,7 @@ class PickCubeEnv(BaseEnv):
             torch.linalg.norm(self.goal_site.pose.p - self.cube.pose.p, axis=1)
             <= self.goal_thresh
         )
-        is_grasped = self.agent.is_grasping(self.cube, max_angle=85)
+        is_grasped = self.agent.is_grasping(self.cube, max_angle=30)
         is_robot_static = self.agent.is_static(0.2)
         return {
             "success": is_obj_placed & is_robot_static,
@@ -402,7 +402,7 @@ class PickCubeEnv(BaseEnv):
         gripper_z_axis = tcp_pose_mat[..., :3, 2]  # Z column of rotation matrix
         world_down = torch.tensor([0.0, 0.0, -1.0], device=self.device)
         orientation_alignment = (gripper_z_axis * world_down).sum(dim=-1)
-        approach_orientation_reward = (orientation_alignment + 1) / 2 * (~is_grasped) * 0.5 #[0, 0.5] rew
+        approach_orientation_reward = (orientation_alignment + 1) / 2 * (~is_grasped) * 0.5 #[0, 0.5] 
         reward += approach_orientation_reward
 
         reward[info["success"]] = 5
