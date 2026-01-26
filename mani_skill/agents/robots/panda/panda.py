@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import sapien
 import sapien.physx as physx
+import sapien.render
 import torch
 
 from mani_skill import PACKAGE_ASSET_DIR
@@ -16,7 +17,9 @@ from mani_skill.utils import common, sapien_utils
 from mani_skill.utils.structs.actor import Actor
 from real.s2r_maniskill_util import apply_sysid_armature
 
-# SYSID for all fr3 tasks.
+# Gripper link names for matte black material application
+GRIPPER_LINK_NAMES = ["fr3_gripper_base", "fr3_left_finger", "fr3_right_finger"]
+
 # SYSTEM_IDENTIFICATION_JSON_PATH = Path(os.getcwd()) / "assets/system_identification/K128_D8/best_seed42.json"
 SYSTEM_IDENTIFICATION_JSON_PATH = Path(os.getcwd()) / "assets/system_identification/best_seed42_save.json"
 
@@ -101,12 +104,50 @@ class Panda(BaseAgent):
         Note: stiffness, damping, and friction are set via controller configs
         to ensure they aren't overwritten. Only armature needs to be set here
         since it's not exposed in the controller config.
+        
+        Also applies random matte black materials to gripper links for domain randomization.
         """
         assert SYSTEM_IDENTIFICATION_JSON_PATH.exists(), f"System identification JSON path {SYSTEM_IDENTIFICATION_JSON_PATH} does not exist"
 
         # Only apply armature here - gains/friction are set in controller configs
         apply_sysid_armature(self.robot, joint_num=7, json_path=str(SYSTEM_IDENTIFICATION_JSON_PATH))
         print(f"[Panda] Applied sysid armature from {SYSTEM_IDENTIFICATION_JSON_PATH}")
+        self._apply_gripper_matte_black_materials()
+    
+    def _apply_gripper_matte_black_materials(self):
+        """Apply random matte black materials to gripper links for domain randomization.
+        
+        Each parallel environment gets a different random shade of matte black,
+        ranging from dark black (0.02) to light black/charcoal (0.15).
+        """
+        for link in self.robot.links:
+            if link.name not in GRIPPER_LINK_NAMES:
+                continue
+            
+            for i, obj in enumerate(link._objs):
+                # Generate random shade of matte black for this environment
+                # Range: 0.02 (very dark) to 0.15 (charcoal/dark grey)
+                shade = np.random.uniform(0.02, 0.08)
+                
+                rb_comp = obj.entity.find_component_by_type(
+                    sapien.render.RenderBodyComponent
+                )
+                if rb_comp is not None:
+                    for render_shape in rb_comp.render_shapes:
+                        for part in render_shape.parts:
+                            # Set matte black color
+                            part.material.set_base_color([shade, shade, shade, 1.0])
+                            # Matte finish: high roughness, no metallic
+                            part.material.set_roughness(0.9)
+                            part.material.set_metallic(0.0)
+                            part.material.set_specular(0.1)
+                            # Clear any textures that might override colors
+                            part.material.set_base_color_texture(None)
+                            part.material.set_normal_texture(None)
+                            part.material.set_metallic_texture(None)
+                            part.material.set_roughness_texture(None)
+        
+        print(f"[Panda] Applied random matte black materials to gripper links: {GRIPPER_LINK_NAMES}")
 
     @property
     def _controller_configs(self):
@@ -223,7 +264,7 @@ class Panda(BaseAgent):
         # However, tune a good force limit to have a good mimic behavior
         gripper_pd_joint_pos = PDJointPosMimicControllerConfig(
             self.gripper_joint_names,
-            lower=-0.01,  
+            lower=0.0,  
             upper=0.035,  
             stiffness=self.gripper_stiffness,
             damping=self.gripper_damping,

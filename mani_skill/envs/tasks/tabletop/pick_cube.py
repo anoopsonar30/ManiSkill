@@ -5,6 +5,7 @@ import glob
 
 import numpy as np
 import sapien
+import sapien.physx
 import sapien.render
 import os
 import torch
@@ -41,11 +42,13 @@ REAL_POSE = np.eye(4)
 REAL_POSE[:3, 3] = camera_data["translations"]
 REAL_POSE[:3, :3] = (R.from_matrix(camera_data["rotations"]) * R.from_euler('zyx', [90, 0, 90], degrees=True)).as_matrix()
 INTRINSICS_REAL = camera_data["K"]
+
+INTRINSICS_REAL[0, -1] -= (1280 - 720) / 2
 INTRINSICS_REAL[:-1] *= 224.0 / 720.0 # adjustment factor after centercropping
 
 
 
-@register_env("PickCube-v1", max_episode_steps=50)
+@register_env("PickCube-v1", max_episode_steps=75)
 class PickCubeEnv(BaseEnv):
     """
     **Task Description:**
@@ -234,11 +237,17 @@ class PickCubeEnv(BaseEnv):
         self.table_scene.table_width = self.table_width
         self.table_scene.scene_objects = [self.table, self.ground]
         
+        cube_material = sapien.physx.PhysxMaterial(
+            static_friction=2.0,
+            dynamic_friction=2.0,
+            restitution=0.0
+        )
+        
         # Build separate cubes for each environment
         cubes = []
         for i in range(self.num_envs):
             builder = self.scene.create_actor_builder()
-            builder.add_box_collision(half_size=[self.cube_half_size] * 3)
+            builder.add_box_collision(half_size=[self.cube_half_size] * 3, material=cube_material)
             builder.add_box_visual(
                 half_size=[self.cube_half_size] * 3,
                 material=sapien.render.RenderMaterial(
@@ -388,11 +397,13 @@ class PickCubeEnv(BaseEnv):
         static_reward = 1 - torch.tanh(5 * torch.linalg.norm(qvel, axis=1))
         reward += static_reward * info["is_obj_placed"]
 
-        # Lets add one more reward for orietnation of final gripper pose 
-        # tcp_orientation = self.agent.tcp_pose.to_transformation_matrix()[..., :3, :3]
-        # tcp_zhat_flip = tcp_orientation[..., :3, 2]
-        # tcp_orientation_rew = torch.sum(tcp_zhat_flip * torch.tensor([0, 0, 1], device=self.device)) * info["is_obj_placed"]
-        # reward += tcp_orientation_rew
+        # Orientation reward: encourage vertical approach (gripper Z aligned with -world Z)
+        tcp_pose_mat = self.agent.tcp_pose.to_transformation_matrix()
+        gripper_z_axis = tcp_pose_mat[..., :3, 2]  # Z column of rotation matrix
+        world_down = torch.tensor([0.0, 0.0, -1.0], device=self.device)
+        orientation_alignment = (gripper_z_axis * world_down).sum(dim=-1)
+        approach_orientation_reward = (orientation_alignment + 1) / 2 * (~is_grasped) * 0.5 #[0, 0.5] rew
+        reward += approach_orientation_reward
 
         reward[info["success"]] = 5
         return reward
