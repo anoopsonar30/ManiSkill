@@ -45,7 +45,7 @@ INTRINSICS_REAL[:-1] *= 224.0 / 720.0 # adjustment factor after centercropping
 
 
 
-@register_env("PickCube-v1", max_episode_steps=100)
+@register_env("PickCube-v1", max_episode_steps=50)
 class PickCubeEnv(BaseEnv):
     """
     **Task Description:**
@@ -274,7 +274,7 @@ class PickCubeEnv(BaseEnv):
         # self.scene.set_ambient_light(np.array([1,1,1])*0.05)
         
         self.scene.set_ambient_light(np.array([1,1,1]) * np.random.uniform(0.05, 0.2))
-        #     [0.3, 0.3, -1], [1, 1, 1], shadow=True, shadow_scale=5, shadow_map_size=2048
+            # [0.3, 0.3, -1], [1, 1, 1], shadow=True, shadow_scale=5, shadow_map_size=2048
         # )
 
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
@@ -316,7 +316,7 @@ class PickCubeEnv(BaseEnv):
             # Robot faces +X direction (toward table center), so 14" in front = +X offset
             robot_base_x = -0.615 + 7 * 0.0254   # -0.4372m
             robot_base_y = 1.200032 - 14 * 0.0254  # 0.8444m
-            cube_spawn_center_x = robot_base_x + 14 * 0.0254  # 14" in front of robot (+X direction)
+            cube_spawn_center_x = robot_base_x + 23 * 0.0254  # 14" in front of robot (+X direction)
             cube_spawn_center_y = robot_base_y  # Same Y as robot base
             
             xyz = torch.zeros((b, 3))
@@ -330,7 +330,7 @@ class PickCubeEnv(BaseEnv):
 
             # Fixed goal position: 14" in front of robot, 300mm above table, same Y as robot base
             goal_xyz = torch.zeros((b, 3))
-            goal_xyz[:, 0] = robot_base_x + 23 * 0.0254  # 21" in front of robot (+X direction)
+            goal_xyz[:, 0] = robot_base_x + 16 * 0.0254  # 16" in front of robot (+X direction)
             goal_xyz[:, 1] = robot_base_y  # Same Y as robot base
             goal_xyz[:, 2] = 0.15  # 300mm above table surface
             self.goal_site.set_pose(Pose.create_from_pq(goal_xyz))
@@ -355,7 +355,7 @@ class PickCubeEnv(BaseEnv):
             torch.linalg.norm(self.goal_site.pose.p - self.cube.pose.p, axis=1)
             <= self.goal_thresh
         )
-        is_grasped = self.agent.is_grasping(self.cube)
+        is_grasped = self.agent.is_grasping(self.cube, max_angle=85)
         is_robot_static = self.agent.is_static(0.2)
         return {
             "success": is_obj_placed & is_robot_static,
@@ -387,6 +387,12 @@ class PickCubeEnv(BaseEnv):
             qvel = qvel[..., :-1]
         static_reward = 1 - torch.tanh(5 * torch.linalg.norm(qvel, axis=1))
         reward += static_reward * info["is_obj_placed"]
+
+        # Lets add one more reward for orietnation of final gripper pose 
+        # tcp_orientation = self.agent.tcp_pose.to_transformation_matrix()[..., :3, :3]
+        # tcp_zhat_flip = tcp_orientation[..., :3, 2]
+        # tcp_orientation_rew = torch.sum(tcp_zhat_flip * torch.tensor([0, 0, 1], device=self.device)) * info["is_obj_placed"]
+        # reward += tcp_orientation_rew
 
         reward[info["success"]] = 5
         return reward

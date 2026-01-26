@@ -351,7 +351,7 @@
     <parent link="fr3_gripper_base"/>
     <child link="fr3_left_finger"/>
     <axis xyz="0 0 1"/>
-    <limit effort="100" lower="0" upper="0.05" velocity="1"/>
+    <limit effort="100" lower="0" upper="0.035" velocity="1"/>
     <dynamics damping="0.3"/>
   </joint>
 
@@ -383,7 +383,7 @@
     <parent link="fr3_gripper_base"/>
     <child link="fr3_right_finger"/>
     <axis xyz="0 0 1"/>
-    <limit effort="100" lower="0" upper="0.05" velocity="1"/>
+    <limit effort="100" lower="0" upper="0.035" velocity="1"/>
     <mimic joint="fr3_finger_joint1"/>
     <dynamics damping="0.3"/>
   </joint>
@@ -393,7 +393,7 @@
   <link name="fr3_gripper_tcp"/>
   <joint name="fr3_gripper_tcp_joint" type="fixed">
     <!-- TCP approximately at the fingertip level -->
-    <origin rpy="0 0 0" xyz="0 0 0.19"/>
+    <origin rpy="0 0 0" xyz="0 0 0.12"/>
     <parent link="fr3_gripper_base"/>
     <child link="fr3_gripper_tcp"/>
   </joint>
