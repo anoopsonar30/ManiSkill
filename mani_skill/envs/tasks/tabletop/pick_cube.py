@@ -248,11 +248,17 @@ class PickCubeEnv(BaseEnv):
         for i in range(self.num_envs):
             builder = self.scene.create_actor_builder()
             builder.add_box_collision(half_size=[self.cube_half_size] * 3, material=cube_material)
+            # Randomize cube color slightly around matte black
+            gray_value = self._batched_episode_rng[i].uniform(0.0, 0.06)
+            jittered_color = [gray_value, gray_value, gray_value, 1.0]
+            cube_material_render = sapien.render.RenderMaterial(
+                base_color=jittered_color,
+                metallic=0.0,
+                roughness=self._batched_episode_rng[i].uniform(0.5, 0.8),
+            )
             builder.add_box_visual(
                 half_size=[self.cube_half_size] * 3,
-                material=sapien.render.RenderMaterial(
-                    base_color=[0, 0, 0, 1],
-                ),
+                material=cube_material_render,
             )
             builder.initial_pose = sapien.Pose(p=[0, 0, self.cube_half_size])
             builder.set_scene_idxs([i])
