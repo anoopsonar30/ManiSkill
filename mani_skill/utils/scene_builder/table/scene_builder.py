@@ -77,8 +77,8 @@ class TableSceneBuilder(SceneBuilder):
                     0,
                     np.pi * 3 / 4,
                     np.pi / 4,
-                    0.04,
-                    0.04,
+                    0.035,
+                    0.035,
                 ]
             )
             if self.env._enhanced_determinism:
@@ -95,7 +95,7 @@ class TableSceneBuilder(SceneBuilder):
                     )
                     + qpos
                 )
-            qpos[:, -2:] = 0.04
+            qpos[:, -2:] = 0.035
             self.env.agent.reset(qpos)
             # Robot base: 7" from back edge, 14" from +Y edge of table
             robot_x = -0.615 + 7 * 0.0254      # -0.4372m
@@ -104,7 +104,7 @@ class TableSceneBuilder(SceneBuilder):
         elif self.env.robot_uids == "panda_wristcam":
             # fmt: off
             qpos = np.array(
-                [0.0, np.pi / 8, 0, -np.pi * 5 / 8, 0, np.pi * 3 / 4, -np.pi / 4, 0.04, 0.04]
+                [0.0, np.pi / 8, 0, -np.pi * 5 / 8, 0, np.pi * 3 / 4, -np.pi / 4, 0.035, 0.035]
             )
             # fmt: on
             if self.env._enhanced_determinism:
@@ -121,7 +121,7 @@ class TableSceneBuilder(SceneBuilder):
                     )
                     + qpos
                 )
-            qpos[:, -2:] = 0.04
+            qpos[:, -2:] = 0.035
             self.env.agent.reset(qpos)
             self.env.agent.robot.set_pose(sapien.Pose([-0.615, 0, 0]))
         elif self.env.robot_uids in [
@@ -176,8 +176,8 @@ class TableSceneBuilder(SceneBuilder):
                     0,
                     np.pi * 3 / 4,
                     np.pi / 4,
-                    0.04,
-                    0.04,
+                    0.035,
+                    0.035,
                 ]
             )
             if self.env._enhanced_determinism:
@@ -194,7 +194,7 @@ class TableSceneBuilder(SceneBuilder):
                     )
                     + qpos
                 )
-            qpos[:, -2:] = 0.04
+            qpos[:, -2:] = 0.035
             agent.agents[1].reset(qpos)
             agent.agents[1].robot.set_pose(
                 sapien.Pose([0, 0.75, 0], q=euler2quat(0, 0, -np.pi / 2))
@@ -214,8 +214,8 @@ class TableSceneBuilder(SceneBuilder):
                     0,
                     np.pi * 3 / 4,
                     np.pi / 4,
-                    0.04,
-                    0.04,
+                    0.035,
+                    0.035,
                 ]
             )
             if self.env._enhanced_determinism:
@@ -232,7 +232,7 @@ class TableSceneBuilder(SceneBuilder):
                     )
                     + qpos
                 )
-            qpos[:, -2:] = 0.04
+            qpos[:, -2:] = 0.035
             agent.agents[1].reset(qpos)
             agent.agents[1].robot.set_pose(
                 sapien.Pose([0, 0.75, 0], q=euler2quat(0, 0, -np.pi / 2))

@@ -116,9 +116,7 @@ class Panda(BaseAgent):
     
     def _apply_gripper_matte_black_materials(self):
         """Apply random matte black materials to gripper links for domain randomization.
-        
-        Each parallel environment gets a different random shade of matte black,
-        ranging from dark black (0.02) to light black/charcoal (0.15).
+        Each parallel environment gets a different random shade of matte black
         """
         for link in self.robot.links:
             if link.name not in GRIPPER_LINK_NAMES:
@@ -126,8 +124,8 @@ class Panda(BaseAgent):
             
             for i, obj in enumerate(link._objs):
                 # Generate random shade of matte black for this environment
-                # Range: 0.02 (very dark) to 0.15 (charcoal/dark grey)
-                shade = np.random.uniform(0.02, 0.08)
+                # Range: 0.0 (pure black) to 0.04 (very dark) - always black, never gray
+                shade = np.random.uniform(0.0, 0.04)
                 
                 rb_comp = obj.entity.find_component_by_type(
                     sapien.render.RenderBodyComponent
