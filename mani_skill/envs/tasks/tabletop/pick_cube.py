@@ -404,12 +404,12 @@ class PickCubeEnv(BaseEnv):
         reward += static_reward * info["is_obj_placed"]
 
         # Orientation reward: encourage vertical approach (gripper Z aligned with -world Z)
-        tcp_pose_mat = self.agent.tcp_pose.to_transformation_matrix()
-        gripper_z_axis = tcp_pose_mat[..., :3, 2]  # Z column of rotation matrix
-        world_down = torch.tensor([0.0, 0.0, -1.0], device=self.device)
-        orientation_alignment = (gripper_z_axis * world_down).sum(dim=-1)
-        approach_orientation_reward = (orientation_alignment + 1) / 2 * (~is_grasped) * 0.5 #[0, 0.5] 
-        reward += approach_orientation_reward
+        # tcp_pose_mat = self.agent.tcp_pose.to_transformation_matrix()
+        # gripper_z_axis = tcp_pose_mat[..., :3, 2]  # Z column of rotation matrix
+        # world_down = torch.tensor([0.0, 0.0, -1.0], device=self.device)
+        # orientation_alignment = (gripper_z_axis * world_down).sum(dim=-1)
+        # approach_orientation_reward = (orientation_alignment + 1) / 2 * (~is_grasped) * 0.5 #[0, 0.5] 
+        # reward += approach_orientation_reward
 
         reward[info["success"]] = 5
         return reward
