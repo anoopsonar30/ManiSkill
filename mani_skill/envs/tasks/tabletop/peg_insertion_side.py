@@ -357,7 +357,7 @@ class PegInsertionSideEnv(BaseEnv):
             # Hole size is randomized first (to match printed parts), then peg = hole - clearance
             # Hole: 18mm x 18mm -> 31mm x 31mm (half-size: 9mm -> 15.5mm)
             box_sides = self._batched_episode_rng.uniform(0.085, 0.125)  # full box side length
-            peg_lengths = box_sides / 2  # peg half-length = box half-side
+            peg_lengths = box_sides / 2  # peg half-length, so full peg length = box_side
             hole_hw = self._batched_episode_rng.uniform(0.009, 0.0155)  # hole half-size (square): 18-31mm full
             peg_hw = hole_hw - self._clearance  # peg = hole - 3mm clearance
             peg_heights = peg_hw
@@ -383,10 +383,10 @@ class PegInsertionSideEnv(BaseEnv):
             # Store hole dimensions (randomized first, peg derived from hole - clearance)
             self.hole_half_h = common.to_tensor(hole_hw)
             self.hole_half_w = common.to_tensor(hole_hw)
-            self.hole_depth = common.to_tensor(peg_lengths)  # hole depth = peg length
+            self.hole_depth = common.to_tensor(box_sides / 2)  # hole depth = half the box (halfway through)
             
-            # Success threshold: 90% of hole depth
-            self.success_insertion_depth = common.to_tensor(0.9 * peg_lengths)
+            # Success threshold: insert black half of peg (peg_lengths = half the full peg = black section length)
+            self.success_insertion_depth = common.to_tensor(peg_lengths)
 
             # in each parallel env we build a different box with a hole and peg
             pegs = []
@@ -394,49 +394,66 @@ class PegInsertionSideEnv(BaseEnv):
 
             for i in range(self.num_envs):
                 scene_idxs = [i]
-                peg_l = peg_lengths[i]
+                peg_l = peg_lengths[i]  # full peg half-length (= box_side)
+                peg_half_l = peg_l / 2  # half of peg for each colored section
                 peg_h = peg_heights[i]
                 peg_w = peg_widths[i]
                 box_half = box_sides[i] / 2
+                hole_d = box_half  # hole depth = half the box
 
-                # Peg color: black with slight variation (like PickCube cube)
-                gray_value = self._batched_episode_rng[i].uniform(0.0, 0.06)
-                peg_color = [gray_value, gray_value, gray_value, 1.0]
+                # Peg black half color: black with slight variation
+                black_gray = self._batched_episode_rng[i].uniform(0.0, 0.06)
+                black_color = [black_gray, black_gray, black_gray, 1.0]
+                
+                # Peg white half color: white with slight variation (matches box)
+                white_gray = self._batched_episode_rng[i].uniform(0.92, 1.0)
+                white_color = [white_gray, white_gray, white_gray, 1.0]
 
                 builder = self.scene.create_actor_builder()
                 builder.add_box_collision(half_size=[peg_l, peg_h, peg_w])
-                # peg - black color with slight variation
-                mat = sapien.render.RenderMaterial(
-                    base_color=peg_color,
+                
+                # Peg head (+X): black half (to be inserted)
+                black_mat = sapien.render.RenderMaterial(
+                    base_color=black_color,
                     metallic=0.0,
                     roughness=self._batched_episode_rng[i].uniform(0.5, 0.8),
                 )
-                # Full peg visual (single color)
                 builder.add_box_visual(
-                    sapien.Pose([0, 0, 0]),
-                    half_size=[peg_l, peg_h, peg_w],
-                    material=mat,
+                    sapien.Pose([peg_half_l, 0, 0]),  # +X half
+                    half_size=[peg_half_l, peg_h, peg_w],
+                    material=black_mat,
                 )
+                
+                # Peg tail (-X): white half (sticks out, gripper grabs here)
+                white_mat = sapien.render.RenderMaterial(
+                    base_color=white_color,
+                    metallic=0.0,
+                    roughness=self._batched_episode_rng[i].uniform(0.5, 0.8),
+                )
+                builder.add_box_visual(
+                    sapien.Pose([-peg_half_l, 0, 0]),  # -X half
+                    half_size=[peg_half_l, peg_h, peg_w],
+                    material=white_mat,
+                )
+                
                 builder.initial_pose = sapien.Pose(p=[0, 0, 0.1])
                 builder.set_scene_idxs(scene_idxs)
                 peg = builder.build(f"peg_{i}")
                 self.remove_from_state_dict_registry(peg)
 
-                # Box color: white with slight variation (like old peg)
-                white_variation = self._batched_episode_rng[i].uniform(0.92, 1.0)
-                box_color = [white_variation, white_variation, white_variation, 1.0]
+                # Box color: white with slight variation (same as peg white half)
+                box_color = white_color  # reuse same white color for box
                 box_material = sapien.render.RenderMaterial(
                     base_color=box_color, roughness=0.5, specular=0.5
                 )
 
                 # Build box with rectangular hole
-                # hole_hw is the randomized hole size, peg is derived from it
                 builder = _build_box_with_rectangular_hole(
                     self.scene,
                     box_half_size=box_half,
                     hole_half_h=hole_hw[i],
                     hole_half_w=hole_hw[i],
-                    hole_depth=peg_l,  # hole goes peg_length deep (half the box)
+                    hole_depth=hole_d,  # hole goes halfway through the box
                     hole_center=hole_centers[i],
                     material=box_material
                 )
@@ -661,10 +678,15 @@ class PegInsertionSideEnv(BaseEnv):
 
         # Stage 4: Insert the peg into the hole once it is grasped and lined up
         peg_head_wrt_goal_inside_hole = self.box_hole_pose.inv() * self.peg_head_pose
+        
+        # Target: peg head should be at success_insertion_depth (0.9 * peg half length) inside the hole
+        insertion_error = peg_head_wrt_goal_inside_hole.p.clone()
+        insertion_error[:, 0] = insertion_error[:, 0] - self.success_insertion_depth  # distance to goal depth
+        
         insertion_reward = 5 * (
             1
             - torch.tanh(
-                5.0 * torch.linalg.norm(peg_head_wrt_goal_inside_hole.p, axis=1)
+                5.0 * torch.linalg.norm(insertion_error, axis=1)
             )
         )
         reward += insertion_reward * (is_grasped & pre_inserted)

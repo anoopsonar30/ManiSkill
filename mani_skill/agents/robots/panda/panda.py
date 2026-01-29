@@ -262,8 +262,8 @@ class Panda(BaseAgent):
         # However, tune a good force limit to have a good mimic behavior
         gripper_pd_joint_pos = PDJointPosMimicControllerConfig(
             self.gripper_joint_names,
-            lower=robot_cfg.gripper_joint_bounds_lower,  
-            upper=robot_cfg.gripper_joint_bounds_upper,  
+            lower=robot_cfg.pd_gripper_joint_pos_lower,  
+            upper=robot_cfg.pd_gripper_joint_pos_upper,  
             stiffness=self.gripper_stiffness,
             damping=self.gripper_damping,
             force_limit=self.gripper_force_limit,
