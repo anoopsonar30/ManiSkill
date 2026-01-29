@@ -16,6 +16,7 @@ from mani_skill.agents.registration import register_agent
 from mani_skill.utils import common, sapien_utils
 from mani_skill.utils.structs.actor import Actor
 from real.s2r_maniskill_util import apply_sysid_armature
+from agent.config.robot_config import get_robot_config
 
 # Gripper link names for matte black material application
 GRIPPER_LINK_NAMES = ["fr3_gripper_base", "fr3_left_finger", "fr3_right_finger"]
@@ -149,9 +150,7 @@ class Panda(BaseAgent):
 
     @property
     def _controller_configs(self):
-        print(f"arm_stiffness type: {type(self.arm_stiffness)}")
         print(f"arm_stiffness value: {self.arm_stiffness}")
-        print(f"arm_damping type: {type(self.arm_damping)}")
         print(f"arm_damping value: {self.arm_damping}")
         # -------------------------------------------------------------------------- #
         # Arm
@@ -166,10 +165,11 @@ class Panda(BaseAgent):
             friction=self.arm_friction,
             normalize_action=False,
         )
+        robot_cfg = get_robot_config()
         arm_pd_joint_delta_pos = PDJointPosControllerConfig(
             self.arm_joint_names,
-            lower=-0.05,
-            upper=0.05,
+            lower=robot_cfg.pd_joint_delta_pos_lower,
+            upper=robot_cfg.pd_joint_delta_pos_upper,
             stiffness=self.arm_stiffness,
             damping=self.arm_damping,
             force_limit=self.arm_force_limit,
@@ -182,8 +182,8 @@ class Panda(BaseAgent):
         # PD ee position
         arm_pd_ee_delta_pos = PDEEPosControllerConfig(
             joint_names=self.arm_joint_names,
-            pos_lower=-0.1,
-            pos_upper=0.1,
+            pos_lower=robot_cfg.pd_ee_delta_pos_lower,
+            pos_upper=robot_cfg.pd_ee_delta_pos_upper,
             stiffness=self.arm_stiffness,
             damping=self.arm_damping,
             force_limit=self.arm_force_limit,
@@ -193,10 +193,10 @@ class Panda(BaseAgent):
         )
         arm_pd_ee_delta_pose = PDEEPoseControllerConfig(
             joint_names=self.arm_joint_names,
-            pos_lower=-0.1,
-            pos_upper=0.1,
-            rot_lower=-0.1,
-            rot_upper=0.1,
+            pos_lower=robot_cfg.pd_ee_delta_pose_pos_lower,
+            pos_upper=robot_cfg.pd_ee_delta_pose_pos_upper,
+            rot_lower=robot_cfg.pd_ee_delta_pose_rot_lower,
+            rot_upper=robot_cfg.pd_ee_delta_pose_rot_upper,
             stiffness=self.arm_stiffness,
             damping=self.arm_damping,
             force_limit=self.arm_force_limit,
@@ -262,8 +262,8 @@ class Panda(BaseAgent):
         # However, tune a good force limit to have a good mimic behavior
         gripper_pd_joint_pos = PDJointPosMimicControllerConfig(
             self.gripper_joint_names,
-            lower=0.0,  
-            upper=0.035,  
+            lower=robot_cfg.gripper_joint_bounds_lower,  
+            upper=robot_cfg.gripper_joint_bounds_upper,  
             stiffness=self.gripper_stiffness,
             damping=self.gripper_damping,
             force_limit=self.gripper_force_limit,
