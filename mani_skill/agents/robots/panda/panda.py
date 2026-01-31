@@ -112,7 +112,7 @@ class Panda(BaseAgent):
 
         # Only apply armature here - gains/friction are set in controller configs
         apply_sysid_armature(self.robot, joint_num=7, json_path=str(SYSTEM_IDENTIFICATION_JSON_PATH))
-        print(f"[Panda] Applied sysid armature from {SYSTEM_IDENTIFICATION_JSON_PATH}")
+        print(f"[FR3] Applied sysid armature from {SYSTEM_IDENTIFICATION_JSON_PATH}")
         self._apply_gripper_matte_black_materials()
     
     def _apply_gripper_matte_black_materials(self):
@@ -146,7 +146,7 @@ class Panda(BaseAgent):
                             part.material.set_metallic_texture(None)
                             part.material.set_roughness_texture(None)
         
-        print(f"[Panda] Applied random matte black materials to gripper links: {GRIPPER_LINK_NAMES}")
+        print(f"[FR3] Applied random matte black materials to gripper links: {GRIPPER_LINK_NAMES}")
 
     @property
     def _controller_configs(self):

@@ -195,7 +195,7 @@ class PegInsertionSideEnv(BaseEnv):
     def __init__(
         self,
         *args,
-        robot_uids="panda",
+        robot_uids="panda_wristcam",
         num_envs=1,
         reconfiguration_freq=None,
         robot_init_qpos_noise=0.02,
@@ -219,19 +219,19 @@ class PegInsertionSideEnv(BaseEnv):
     def _default_sim_config(self):
         return SimConfig()
 
-    @property
-    def _default_sensor_configs(self):
-        # Camera is mounted on cam_mount (kinematic actor) with identity local pose.
-        # The cam_mount pose is set in _initialize_episode to be relative to link_0
-        # with random perturbations applied each episode.
-        return CameraConfig(
-            "base_camera",
-            sapien.Pose(),  # Identity local pose; world pose set via cam_mount
-            224, 224,
-            intrinsic=torch.from_numpy(INTRINSICS_REAL),
-            near=0.01, far=100,
-            mount=self.cam_mount,
-        )
+    # @property
+    # def _default_sensor_configs(self):
+    #     # Camera is mounted on cam_mount (kinematic actor) with identity local pose.
+    #     # The cam_mount pose is set in _initialize_episode to be relative to link_0
+    #     # with random perturbations applied each episode.
+    #     return CameraConfig(
+    #         "base_camera",
+    #         sapien.Pose(),  # Identity local pose; world pose set via cam_mount
+    #         224, 224,
+    #         intrinsic=torch.from_numpy(INTRINSICS_REAL),
+    #         near=0.01, far=100,
+    #         mount=self.cam_mount,
+    #     )
 
     @property
     def _default_human_render_camera_configs(self):
@@ -359,7 +359,7 @@ class PegInsertionSideEnv(BaseEnv):
             box_sides = self._batched_episode_rng.uniform(0.085, 0.125)  # full box side length
             peg_lengths = box_sides / 2  # peg half-length, so full peg length = box_side
             hole_hw = self._batched_episode_rng.uniform(0.009, 0.0155)  # hole half-size (square): 18-31mm full
-            peg_hw = hole_hw - self._clearance  # peg = hole - 3mm clearance
+            peg_hw = hole_hw - self._clearance  # peg = hole - 2mm clearance
             peg_heights = peg_hw
             peg_widths = peg_hw
             
@@ -476,8 +476,9 @@ class PegInsertionSideEnv(BaseEnv):
         print("Loading EXR Dome lighting with ambient randomization preset")
         for i in range(self.num_envs):
             self.scene.sub_scenes[i].set_environment_map(EXRS_DOME_LIGHTINGS[self._batched_episode_rng[i].randint(0, len(EXRS_DOME_LIGHTINGS))])
-
-        self.scene.set_ambient_light(np.array([1, 1, 1]) * np.random.uniform(0.05, 0.2))
+            self.scene.sub_scenes[i].render_system.ambient_light = (
+                np.array([1, 1, 1]) * self._batched_episode_rng[i].uniform(0.05, 0.2)
+            )
 
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
         with torch.device(self.device):
@@ -507,6 +508,10 @@ class PegInsertionSideEnv(BaseEnv):
             )
             cam_pose = cam_pose * perturbation
             self.cam_mount.set_pose(cam_pose)
+
+            # Randomize wrist camera if using 
+            if self.robot_uids == "panda_wristcam":
+                self.agent.randomize_wrist_camera_pose(env=self, env_idx=env_idx)
 
             # Robot base position for spawn calculations
             # Robot base is at: x = -0.615 + 7*0.0254 = -0.4372, y = 1.200032 - 14*0.0254 = 0.8444
@@ -558,22 +563,21 @@ class PegInsertionSideEnv(BaseEnv):
             )
             self.box.set_pose(Pose.create_from_pq(pos, quat))
 
-
-            qpos = np.array(
-                [
-                    0.0,
-                    np.pi / 8,
-                    0,
-                    -np.pi * 5 / 8,
-                    0,
-                    np.pi * 3 / 4,
-                    -np.pi / 4,
-                    0.04,
-                    0.04,
-                ]
-            )
+            # Override robot qpos: gripper hovering above peg spawn center
+            # TODO: check peg is always in frame at start
+            qpos = np.array([
+                -0.36,          
+                -0.01745329,         
+                0.0,         
+                -2.3387412,          
+                0.0,          
+                2.26892803,          
+                -1.13446401,   
+                0.035,         
+                0.035,         
+            ])
             qpos = self._episode_rng.normal(0, self.robot_init_qpos_noise, (b, len(qpos))) + qpos
-            qpos[:, -2:] = 0.04
+            qpos[:, -2:] = 0.035  # keep gripper open
             self.agent.robot.set_qpos(qpos)
 
     # save some commonly used attributes

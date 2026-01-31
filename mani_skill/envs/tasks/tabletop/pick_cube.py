@@ -79,6 +79,7 @@ class PickCubeEnv(BaseEnv):
     cube_spawn_center = (0, 0)
 
     def __init__(self, *args, robot_uids="panda", robot_init_qpos_noise=0.02, **kwargs):
+    # def __init__(self, *args, robot_uids="panda_wristcam", robot_init_qpos_noise=0.02, **kwargs):
         self.robot_init_qpos_noise = robot_init_qpos_noise
         if robot_uids in PICK_CUBE_CONFIGS:
             cfg = PICK_CUBE_CONFIGS[robot_uids]
@@ -283,25 +284,21 @@ class PickCubeEnv(BaseEnv):
         self._hidden_objects.append(self.goal_site)
 
     def _load_lighting(self, options: Dict):
-        print("Loading EXR Dome lighting with ambient randomization preset")
+        # Initial skybox loading 
         for i in range(self.num_envs):
             self.scene.sub_scenes[i].set_environment_map(EXRS_DOME_LIGHTINGS[self._batched_episode_rng[i].randint(0, len(EXRS_DOME_LIGHTINGS))])
-        # self.scene.set_ambient_light(np.array([1,1,1])*0.05)
-        
-        self.scene.set_ambient_light(np.array([1,1,1]) * np.random.uniform(0.05, 0.2))
-            # [0.3, 0.3, -1], [1, 1, 1], shadow=True, shadow_scale=5, shadow_map_size=2048
-        # )
+            self.scene.sub_scenes[i].render_system.ambient_light = (
+                np.array([1, 1, 1]) * self._batched_episode_rng[i].uniform(0.05, 0.2)
+            )
 
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
         with torch.device(self.device):
             b = len(env_idx)
             self.table_scene.initialize(env_idx)
 
-            # TODO: randomize lighting a bit more
-
 
             link0_pose = self.agent.robot.links[0].pose[env_idx]
-            
+
             # Apply nominal camera pose (REAL_POSE) relative to link_0
             nominal_pose = Pose.create(sapien.Pose(REAL_POSE))
             cam_pose = link0_pose * nominal_pose
@@ -323,6 +320,11 @@ class PickCubeEnv(BaseEnv):
             cam_pose = cam_pose * perturbation
             self.cam_mount.set_pose(cam_pose)
 
+            # HACK: fix this when we generalize sim2real env to all tasks
+            if self.robot_uids == "panda_wristcam":
+                self.agent.randomize_wrist_camera_pose(env=self, env_idx=env_idx)
+
+            
             # TODO: randomize quick physics parameters (friction, coef resitution, intertia, mass, etc.)
 
             #             

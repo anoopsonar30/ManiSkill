@@ -102,11 +102,9 @@ class TableSceneBuilder(SceneBuilder):
             robot_y = 1.200032 - 14 * 0.0254   # 0.8444m
             self.env.agent.robot.set_pose(sapien.Pose([robot_x, robot_y, 0]))
         elif self.env.robot_uids == "panda_wristcam":
-            # fmt: off
             qpos = np.array(
                 [0.0, np.pi / 8, 0, -np.pi * 5 / 8, 0, np.pi * 3 / 4, -np.pi / 4, 0.035, 0.035]
             )
-            # fmt: on
             if self.env._enhanced_determinism:
                 qpos = (
                     self.env._batched_episode_rng[env_idx].normal(
@@ -123,7 +121,10 @@ class TableSceneBuilder(SceneBuilder):
                 )
             qpos[:, -2:] = 0.035
             self.env.agent.reset(qpos)
-            self.env.agent.robot.set_pose(sapien.Pose([-0.615, 0, 0]))
+            # Robot base: 7" from back edge, 14" from +Y edge of table (same as panda)
+            robot_x = -0.615 + 7 * 0.0254      # -0.4372m
+            robot_y = 1.200032 - 14 * 0.0254   # 0.8444m
+            self.env.agent.robot.set_pose(sapien.Pose([robot_x, robot_y, 0]))
         elif self.env.robot_uids in [
             "xarm6_allegro_left",
             "xarm6_allegro_right",
