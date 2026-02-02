@@ -356,9 +356,9 @@ class PegInsertionSideEnv(BaseEnv):
             # Box is a cube with side length in [0.085, 0.125]
             # Hole size is randomized first (to match printed parts), then peg = hole - clearance
             # Hole: 18mm x 18mm -> 31mm x 31mm (half-size: 9mm -> 15.5mm)
-            box_sides = self._batched_episode_rng.uniform(0.085, 0.125)  # full box side length
+            box_sides = self._batched_episode_rng.uniform(0.1, 0.125)  # full box side length
             peg_lengths = box_sides / 2  # peg half-length, so full peg length = box_side
-            hole_hw = self._batched_episode_rng.uniform(0.009, 0.0155)  # hole half-size (square): 18-31mm full
+            hole_hw = self._batched_episode_rng.uniform(0.012, 0.0155)  # hole half-size (square): 24-31mm full
             peg_hw = hole_hw - self._clearance  # peg = hole - 2mm clearance
             peg_heights = peg_hw
             peg_widths = peg_hw
@@ -643,10 +643,12 @@ class PegInsertionSideEnv(BaseEnv):
         # Stage 2: Encourage gripper to move close to peg tail and grasp it
         gripper_pos = self.agent.tcp.pose.p
         tgt_gripper_pose = self.peg.pose
-        offset = sapien.Pose(
-            [-0.06, 0, 0]
-        )  # account for panda gripper width with a bit more leeway
-        tgt_gripper_pose = tgt_gripper_pose * (offset)
+        
+        # Dynamic offset reward 
+        offset_p = torch.zeros((self.num_envs, 3), device=self.device)
+        offset_p[:, 0] = -self.peg_half_sizes[:, 0] / 2
+        offset = Pose.create_from_pq(p=offset_p)
+        tgt_gripper_pose = tgt_gripper_pose * offset
         gripper_to_peg_dist = torch.linalg.norm(
             gripper_pos - tgt_gripper_pose.p, axis=1
         )
