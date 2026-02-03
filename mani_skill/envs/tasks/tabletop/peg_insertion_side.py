@@ -680,22 +680,28 @@ class PegInsertionSideEnv(BaseEnv):
         # Stage 4: Insert the peg into the hole once it is grasped and lined up
         peg_head_wrt_goal_inside_hole = self.box_hole_pose.inv() * self.peg_head_pose
         
-        insertion_error = peg_head_wrt_goal_inside_hole.p.clone()
-        insertion_error[:, 0] = insertion_error[:, 0] - self.success_insertion_depth  # distance to goal depth
-        
         insertion_reward = 5 * (
-            1
-            - torch.tanh(
-                5.0 * torch.linalg.norm(insertion_error, axis=1)
-            )
+            torch.tanh(2.0 * torch.clamp(peg_head_wrt_goal_inside_hole.p.clone()[:, 0], min=0.0) / self.success_insertion_depth)
+            # - 0.5 * torch.tanh(10.0 * torch.linalg.norm(peg_head_wrt_goal_inside_hole.p.clone()[:, 1:], axis=1))
         )
+        # insertion_error = peg_head_wrt_goal_inside_hole.p.clone()
+        # insertion_error[:, 0] = insertion_error[:, 0] - self.success_insertion_depth  # distance to goal depth
+
+        # insertion_error_clamped = torch.clamp(insertion_error, min=0.0)
+        
+        # insertion_reward = 5 * (
+        #     1
+        #     - torch.tanh(
+        #         5.0 * torch.linalg.norm(insertion_error_clamped, axis=1)
+        #     )
+        # )
         reward += insertion_reward * (is_grasped & pre_inserted)
 
-        reward[info["success"]] = 10
+        reward[info["success"]] = 11
 
         return reward
 
     def compute_normalized_dense_reward(
         self, obs: Any, action: torch.Tensor, info: Dict
     ):
-        return self.compute_dense_reward(obs, action, info) / 10
+        return self.compute_dense_reward(obs, action, info) / 11
