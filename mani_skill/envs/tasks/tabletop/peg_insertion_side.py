@@ -518,9 +518,9 @@ class PegInsertionSideEnv(BaseEnv):
             # Original spawn region was [-0.1, -0.3] to [0.1, 0] - a 0.2 x 0.3 region
             # Now spawn relative to robot position
             peg_spawn_center_x = robot_base_x + 14 * 0.0254  # 14" in front of robot (+X direction)
-            peg_spawn_center_y = robot_base_y - 6 * 0.0254   # 6" to the side (-Y direction)
-            peg_spawn_half_x = 0.1  # ±10cm in X
-            peg_spawn_half_y = 0.15  # ±15cm in Y
+            peg_spawn_center_y = robot_base_y - 8 * 0.0254   # 8" to the side (-Y direction, away from box)
+            peg_spawn_half_x = 0.05  # ±5cm in X (reduced from ±10cm)
+            peg_spawn_half_y = 0.10  # ±10cm in Y (reduced from ±15cm)
 
             xy = torch.zeros((b, 2))
             xy[:, 0] = peg_spawn_center_x + (torch.rand((b,)) * 2 - 1) * peg_spawn_half_x
@@ -539,10 +539,12 @@ class PegInsertionSideEnv(BaseEnv):
 
             # Box spawn: Further in front of robot (beyond peg)
             # Original spawn region was [-0.05, 0.2] to [0.05, 0.4] - a 0.1 x 0.2 region
-            box_spawn_center_x = robot_base_x + 20 * 0.0254  # 20" in front of robot (+X direction)
+            # NOTE: Increased box distance to ensure minimum 10cm gap from peg spawn region
+            # Peg max X: 12" + 5cm = 0.355m, Box min X: 22" - 5cm = 0.509m → gap ~15cm
+            box_spawn_center_x = robot_base_x + 22 * 0.0254  # 22" in front of robot (+X direction)
             box_spawn_center_y = robot_base_y  # Same Y as robot base
             box_spawn_half_x = 0.05  # ±5cm in X
-            box_spawn_half_y = 0.1   # ±10cm in Y
+            box_spawn_half_y = 0.08  # ±8cm in Y (reduced to avoid Y overlap with peg)
 
             xy = torch.zeros((b, 2))
             xy[:, 0] = box_spawn_center_x + (torch.rand((b,)) * 2 - 1) * box_spawn_half_x
@@ -640,8 +642,9 @@ class PegInsertionSideEnv(BaseEnv):
         gripper_pos = self.agent.tcp.pose.p
         tgt_gripper_pose = self.peg.pose
         
+        # Target grasp position: 85% towards tail end (away from insertion end)
         offset_p = torch.zeros((self.num_envs, 3), device=self.device)
-        offset_p[:, 0] = -self.peg_half_sizes[:, 0] * 0.75
+        offset_p[:, 0] = -self.peg_half_sizes[:, 0] * 0.85
         offset = Pose.create_from_pq(p=offset_p)
         tgt_gripper_pose = tgt_gripper_pose * offset
         gripper_to_peg_dist = torch.linalg.norm(
@@ -680,6 +683,10 @@ class PegInsertionSideEnv(BaseEnv):
         # Stage 4: Insert the peg into the hole once it is grasped and lined up
         peg_head_wrt_goal_inside_hole = self.box_hole_pose.inv() * self.peg_head_pose
         
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
         insertion_error = peg_head_wrt_goal_inside_hole.p.clone()
         insertion_error[:, 0] = insertion_error[:, 0] - self.success_insertion_depth  # distance to goal depth
 
