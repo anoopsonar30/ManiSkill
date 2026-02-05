@@ -468,13 +468,13 @@ class PegInsertionSideEnv(BaseEnv):
             self.add_to_state_dict_registry(self.peg)
             self.add_to_state_dict_registry(self.box)
 
-    def _load_lighting(self, options: Dict):
-        print("Loading EXR Dome lighting with ambient randomization preset")
-        for i in range(self.num_envs):
-            self.scene.sub_scenes[i].set_environment_map(EXRS_DOME_LIGHTINGS[self._batched_episode_rng[i].randint(0, len(EXRS_DOME_LIGHTINGS))])
-            self.scene.sub_scenes[i].render_system.ambient_light = (
-                np.array([1, 1, 1]) * self._batched_episode_rng[i].uniform(0.05, 0.2)
-            )
+    # def _load_lighting(self, options: Dict):
+    #     print("Loading EXR Dome lighting with ambient randomization preset")
+    #     for i in range(self.num_envs):
+    #         self.scene.sub_scenes[i].set_environment_map(EXRS_DOME_LIGHTINGS[self._batched_episode_rng[i].randint(0, len(EXRS_DOME_LIGHTINGS))])
+    #         self.scene.sub_scenes[i].render_system.ambient_light = (
+    #             np.array([1, 1, 1]) * self._batched_episode_rng[i].uniform(0.05, 0.2)
+    #         )
 
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
         with torch.device(self.device):
@@ -680,19 +680,16 @@ class PegInsertionSideEnv(BaseEnv):
         # Stage 4: Insert the peg into the hole once it is grasped and lined up
         peg_head_wrt_goal_inside_hole = self.box_hole_pose.inv() * self.peg_head_pose
         
-        # insertion_reward = 5 * (
-        #     torch.tanh(2.0 * torch.clamp(peg_head_wrt_goal_inside_hole.p.clone()[:, 0], min=0.0) / self.success_insertion_depth)
-        #     # - 0.5 * torch.tanh(10.0 * torch.linalg.norm(peg_head_wrt_goal_inside_hole.p.clone()[:, 1:], axis=1))
-        # )
         insertion_error = peg_head_wrt_goal_inside_hole.p.clone()
         insertion_error[:, 0] = insertion_error[:, 0] - self.success_insertion_depth  # distance to goal depth
 
-        insertion_error_clamped = torch.clamp(insertion_error, min=0.0)
+        # dont penalize overinsertion (\hat{x})
+        insertion_error[:, 0] = torch.clamp(insertion_error[:, 0], min=0.0)
         
         insertion_reward = 5 * (
             1
             - torch.tanh(
-                5.0 * torch.linalg.norm(insertion_error_clamped, axis=1)
+                5.0 * torch.linalg.norm(insertion_error, axis=1)
             )
         )
         reward += insertion_reward * (is_grasped & pre_inserted)
