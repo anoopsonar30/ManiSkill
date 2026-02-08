@@ -24,6 +24,15 @@ _quat_xyzw = _combined.as_quat()  # scipy: [x, y, z, w]
 CAMERA_POSE_Q = [_quat_xyzw[3], _quat_xyzw[0], _quat_xyzw[1], _quat_xyzw[2]]  # sapien: [w, x, y, z]
 
 
+INTRINSICS_WRIST_REAL = np.array([
+        [436.40466309,   0.          , 322.48730469],
+        [  0.          , 435.8762207 , 245.15719604],
+        [  0.          , 0.          , 1.        ]
+    ])
+INTRINSICS_WRIST_REAL[0, -1] -= (640 - 480) / 2
+INTRINSICS_WRIST_REAL[:-1] *= 224.0 / 480.0 
+
+
 @register_agent()
 class PandaWristCam(Panda):
     """Panda arm robot with wrist camera attached to gripper.
@@ -41,9 +50,9 @@ class PandaWristCam(Panda):
             CameraConfig(
                 uid="hand_camera",
                 pose=sapien.Pose(p=[0, 0, 0], q=CAMERA_POSE_Q),
-                width=128,
-                height=128,
-                fov=np.pi / 2,
+                width=224,
+                height=224,
+                intrinsic=torch.from_numpy(INTRINSICS_WRIST_REAL),
                 near=0.01,
                 far=100,
                 mount=self.robot.links_map["wrist_camera_origin"],
