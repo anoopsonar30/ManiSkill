@@ -320,7 +320,7 @@
   </link>
   <joint name="fr3_gripper_base_joint" type="fixed">
     <!-- Rotated -45 degrees around Z axis (same as Franka hand mounting convention) -->
-    <origin rpy="0 0 -0.7853981633974483" xyz="0 0 0"/>
+    <origin rpy="0 0 -2.35619449019" xyz="0 0 0"/>
     <parent link="fr3_link8"/>
     <child link="fr3_gripper_base"/>
   </joint>
