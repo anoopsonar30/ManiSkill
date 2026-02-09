@@ -539,7 +539,7 @@ class PegInsertionSideEnv(BaseEnv):
 
             # Box spawn: Further in front of robot (beyond peg)
             # Original spawn region was [-0.05, 0.2] to [0.05, 0.4] - a 0.1 x 0.2 region
-            box_spawn_center_x = robot_base_x + 20 * 0.0254  # 20" in front of robot (+X direction)
+            box_spawn_center_x = robot_base_x + 23 * 0.0254  # 20" in front of robot (+X direction)
             box_spawn_center_y = robot_base_y  # Same Y as robot base
             box_spawn_half_x = 0.05  # ±5cm in X
             box_spawn_half_y = 0.1   # ±10cm in Y
