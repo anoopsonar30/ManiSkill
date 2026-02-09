@@ -22,6 +22,10 @@ class PegInsertionSideGlobalAndWristEnv(PegInsertionSideEnv):
 
     def __init__(self, *args, robot_uids="panda_wristcam", **kwargs):
         super().__init__(*args, robot_uids=robot_uids, **kwargs)
+        
+
+    def _default_human_render_camera_configs(self):
+        return []
 
     @property
     def _default_sensor_configs(self):
