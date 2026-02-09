@@ -40,7 +40,6 @@ camera_data = np.load(camera_data)
 REAL_POSE = np.eye(4)
 REAL_POSE[:3, 3] = camera_data["translations"]
 REAL_POSE[:3, :3] = (R.from_matrix(camera_data["rotations"]) * R.from_euler('zyx', [90, 0, 90], degrees=True)).as_matrix()
-INTRINSICS_REAL = camera_data["K"]
 
 camera_data = Path(os.getcwd()) / "assets/calibration_data.npz"
 camera_data = np.load(camera_data)
@@ -221,9 +220,7 @@ class PegInsertionSideEnv(BaseEnv):
 
     # @property
     # def _default_sensor_configs(self):
-    #     # Camera is mounted on cam_mount (kinematic actor) with identity local pose.
-    #     # The cam_mount pose is set in _initialize_episode to be relative to link_0
-    #     # with random perturbations applied each episode.
+    #     # Camera is mounted on cam_mount with identity local pose
     #     return CameraConfig(
     #         "base_camera",
     #         sapien.Pose(),  # Identity local pose; world pose set via cam_mount
