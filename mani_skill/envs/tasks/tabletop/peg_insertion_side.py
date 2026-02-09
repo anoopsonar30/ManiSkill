@@ -474,6 +474,7 @@ class PegInsertionSideEnv(BaseEnv):
 
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
         with torch.device(self.device):
+            env_idx = env_idx.to(self.device)
             b = len(env_idx)
             self.table_scene.initialize(env_idx)
 
