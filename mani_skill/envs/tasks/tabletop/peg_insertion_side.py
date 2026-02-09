@@ -170,8 +170,9 @@ class PegInsertionSideEnv(BaseEnv):
     Pick up a black peg and insert it into the white box with a rectangular hole.
 
     **Randomizations:**
-    - Box is a cube with side length randomized between 0.085m and 0.125m (during reconfiguration)
-    - Peg dimensions: length = box_side/2, height and width randomized between 0.015m and 0.025m (during reconfiguration)
+    - Box is a cube with side length randomized between 0.115m and 0.135m, centered on 0.125m real-world part (during reconfiguration)
+    - Hole half-size randomized between 0.0135m and 0.0175m (full hole 27-35mm, centered on 31mm real-world hole)
+    - Peg dimensions: length = box_side/2, cross-section = hole_size - 2mm clearance per side (centered on 27mm real-world peg)
     - Hole depth = peg length (half of box), with 3mm clearance on height/width
     - Hole center offset: uniformly randomized ±25mm in Y and Z
     - Peg is laid flat on table and has its xy position and z-axis rotation randomized
@@ -350,13 +351,11 @@ class PegInsertionSideEnv(BaseEnv):
             self.table_scene.scene_objects = [self.table, self.ground]
 
             # Randomize peg and box dimensions
-            # Box is a cube with side length in [0.085, 0.125]
-            # Hole size is randomized first (to match printed parts), then peg = hole - clearance
-            # Hole: 18mm x 18mm -> 31mm x 31mm (half-size: 9mm -> 15.5mm)
-            box_sides = self._batched_episode_rng.uniform(0.1, 0.125)  # full box side length
+            box_sides = self._batched_episode_rng.uniform(0.115, 0.135)  # full box side length, centered on 0.125m
             peg_lengths = box_sides / 2  
-            hole_hw = self._batched_episode_rng.uniform(0.012, 0.0155)  # hole half-size (square): 24-31mm full
-            peg_hw = hole_hw - self._clearance  # peg = hole - 2mm clearance
+            # Hole half-size: 0.0155m ± 0.002m (full hole 27-35mm, centered on 31mm)
+            hole_hw = self._batched_episode_rng.uniform(0.0135, 0.0175)  # hole half-size (square)
+            peg_hw = hole_hw - self._clearance  # peg = hole - 2mm clearance per side
             peg_heights = peg_hw
             peg_widths = peg_hw
             
