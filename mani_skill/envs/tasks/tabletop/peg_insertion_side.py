@@ -40,6 +40,7 @@ camera_data = np.load(camera_data)
 REAL_POSE = np.eye(4)
 REAL_POSE[:3, 3] = camera_data["translations"]
 REAL_POSE[:3, :3] = (R.from_matrix(camera_data["rotations"]) * R.from_euler('zyx', [90, 0, 90], degrees=True)).as_matrix()
+INTRINSICS_REAL = camera_data["K"]
 
 camera_data = Path(os.getcwd()) / "assets/calibration_data.npz"
 camera_data = np.load(camera_data)
@@ -170,9 +171,8 @@ class PegInsertionSideEnv(BaseEnv):
     Pick up a black peg and insert it into the white box with a rectangular hole.
 
     **Randomizations:**
-    - Box is a cube with side length randomized between 0.115m and 0.135m, centered on 0.125m real-world part (during reconfiguration)
-    - Hole half-size randomized between 0.0135m and 0.0175m (full hole 27-35mm, centered on 31mm real-world hole)
-    - Peg dimensions: length = box_side/2, cross-section = hole_size - 2mm clearance per side (centered on 27mm real-world peg)
+    - Box is a cube with side length randomized between 0.085m and 0.125m (during reconfiguration)
+    - Peg dimensions: length = box_side/2, height and width randomized between 0.015m and 0.025m (during reconfiguration)
     - Hole depth = peg length (half of box), with 3mm clearance on height/width
     - Hole center offset: uniformly randomized ±25mm in Y and Z
     - Peg is laid flat on table and has its xy position and z-axis rotation randomized
@@ -221,7 +221,9 @@ class PegInsertionSideEnv(BaseEnv):
 
     # @property
     # def _default_sensor_configs(self):
-    #     # Camera is mounted on cam_mount with identity local pose
+    #     # Camera is mounted on cam_mount (kinematic actor) with identity local pose.
+    #     # The cam_mount pose is set in _initialize_episode to be relative to link_0
+    #     # with random perturbations applied each episode.
     #     return CameraConfig(
     #         "base_camera",
     #         sapien.Pose(),  # Identity local pose; world pose set via cam_mount
@@ -351,11 +353,13 @@ class PegInsertionSideEnv(BaseEnv):
             self.table_scene.scene_objects = [self.table, self.ground]
 
             # Randomize peg and box dimensions
-            box_sides = self._batched_episode_rng.uniform(0.115, 0.135)  # full box side length, centered on 0.125m
+            # Box is a cube with side length in [0.085, 0.125]
+            # Hole size is randomized first (to match printed parts), then peg = hole - clearance
+            # Hole: 18mm x 18mm -> 31mm x 31mm (half-size: 9mm -> 15.5mm)
+            box_sides = self._batched_episode_rng.uniform(0.1, 0.125)  # full box side length
             peg_lengths = box_sides / 2  
-            # Hole half-size: 0.0155m ± 0.002m (full hole 27-35mm, centered on 31mm)
-            hole_hw = self._batched_episode_rng.uniform(0.0135, 0.0175)  # hole half-size (square)
-            peg_hw = hole_hw - self._clearance  # peg = hole - 2mm clearance per side
+            hole_hw = self._batched_episode_rng.uniform(0.012, 0.0155)  # hole half-size (square): 24-31mm full
+            peg_hw = hole_hw - self._clearance  # peg = hole - 2mm clearance
             peg_heights = peg_hw
             peg_widths = peg_hw
             
@@ -381,8 +385,7 @@ class PegInsertionSideEnv(BaseEnv):
             self.hole_half_w = common.to_tensor(hole_hw)
             self.hole_depth = common.to_tensor(box_sides / 2)  # hole depth = half the box (halfway through)
             
-            # Success threshold: insert black half of peg (peg_lengths = half the full peg = black section length)
-            self.success_insertion_depth = common.to_tensor(peg_lengths) * 0.9
+            self.success_insertion_depth = common.to_tensor(peg_lengths) * 1.0
 
             # in each parallel env we build a different box with a hole and peg
             pegs = []
@@ -451,7 +454,7 @@ class PegInsertionSideEnv(BaseEnv):
                 )
                 builder.initial_pose = sapien.Pose(p=[0, 1, 0.1])
                 builder.set_scene_idxs(scene_idxs)
-                box = builder.build_kinematic(f"box_with_hole_{i}")
+                box = builder.build(f"box_with_hole_{i}")
                 self.remove_from_state_dict_registry(box)
                 pegs.append(peg)
                 boxes.append(box)
@@ -474,7 +477,6 @@ class PegInsertionSideEnv(BaseEnv):
 
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
         with torch.device(self.device):
-            env_idx = env_idx.to(self.device)
             b = len(env_idx)
             self.table_scene.initialize(env_idx)
 
@@ -536,7 +538,7 @@ class PegInsertionSideEnv(BaseEnv):
 
             # Box spawn: Further in front of robot (beyond peg)
             # Original spawn region was [-0.05, 0.2] to [0.05, 0.4] - a 0.1 x 0.2 region
-            box_spawn_center_x = robot_base_x + 23 * 0.0254  # 20" in front of robot (+X direction)
+            box_spawn_center_x = robot_base_x + 20 * 0.0254  # 20" in front of robot (+X direction)
             box_spawn_center_y = robot_base_y  # Same Y as robot base
             box_spawn_half_x = 0.05  # ±5cm in X
             box_spawn_half_y = 0.1   # ±10cm in Y
@@ -552,7 +554,7 @@ class PegInsertionSideEnv(BaseEnv):
                 self.device,
                 lock_x=True,
                 lock_y=True,
-                bounds=(0, np.pi / 2),
+                bounds=(np.pi / 2 - np.pi / 8, np.pi / 2 + np.pi / 8),
             )
             self.box.set_pose(Pose.create_from_pq(pos, quat))
 
@@ -573,7 +575,9 @@ class PegInsertionSideEnv(BaseEnv):
             qpos[:, -2:] = 0.035  # keep gripper open
             self.agent.robot.set_qpos(qpos)
 
-    # save some commonly used attributes
+            self.box_initial_pos = self.box.pose.p.clone()
+
+
     @property
     def peg_head_pos(self):
         return self.peg.pose.p + self.peg_head_offsets.p
@@ -608,8 +612,12 @@ class PegInsertionSideEnv(BaseEnv):
         z_flag = (-self.hole_half_w <= peg_head_pos_at_hole[:, 2]) & (
             peg_head_pos_at_hole[:, 2] <= self.hole_half_w
         )
+
+        box_displacement = torch.abs(self.box.pose.p - self.box_initial_pos)
+        box_stable = (box_displacement[:, 0] <= 0.01) & (box_displacement[:, 1] <= 0.01) & (box_displacement[:, 2] <= 0.01)
+
         return (
-            x_flag & y_flag & z_flag,
+            x_flag & y_flag & z_flag & box_stable,
             peg_head_pos_at_hole,
         )
 
@@ -678,13 +686,16 @@ class PegInsertionSideEnv(BaseEnv):
         peg_head_wrt_goal_inside_hole = self.box_hole_pose.inv() * self.peg_head_pose
         
         insertion_error = peg_head_wrt_goal_inside_hole.p.clone()
-        insertion_error[:, 0] = insertion_error[:, 0] - self.success_insertion_depth  # distance to goal depth
+        insertion_error[:, 0] = torch.clamp(insertion_error[:, 0] - self.success_insertion_depth, max=0.0)
         
         insertion_reward = 5 * (
             1
             - torch.tanh(
                 5.0 * torch.linalg.norm(insertion_error, axis=1)
             )
+        )
+        reward += 1 - torch.tanh(
+            5.0 * torch.linalg.norm(self.box.pose.p - self.box_initial_pos, axis=1)
         )
         reward += insertion_reward * (is_grasped & pre_inserted)
 
