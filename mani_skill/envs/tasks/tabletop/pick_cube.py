@@ -402,8 +402,9 @@ class PickCubeEnv(BaseEnv):
             qvel = qvel[..., :-2]
         elif self.robot_uids == "so100":
             qvel = qvel[..., :-1]
-        static_reward = 1 - torch.tanh(5 * torch.linalg.norm(qvel, axis=1))
-        reward += static_reward * info["is_obj_placed"]
+        static_reward = 1 - torch.tanh(10 * torch.linalg.norm(qvel, axis=1))
+        near_goal_gate = 1 - torch.tanh(obj_to_goal_dist / self.goal_thresh)
+        reward += 2 * static_reward * near_goal_gate
 
         # Orientation reward: encourage vertical approach (gripper Z aligned with -world Z)
         # tcp_pose_mat = self.agent.tcp_pose.to_transformation_matrix()
