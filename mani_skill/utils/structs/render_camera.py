@@ -36,6 +36,7 @@ class RenderCamera:
     scene: Any
     camera_group: sapien.render.RenderCameraGroup = None
     mount: Union[Actor, Link] = None
+    _rt_texture_names: List[str] = None
 
     # we cache model and extrinsic matrices since the code here supports computing these when the camera is mounted and these are always changing
     _cached_model_matrix: torch.Tensor = None
@@ -162,9 +163,16 @@ class RenderCamera:
             names = [names]
         if self.scene.gpu_sim_enabled and not self.scene.parallel_in_single_scene:
             if SAPIEN_RENDER_SYSTEM == "3.0":
-                return [
-                    self.camera_group.get_picture_cuda(name).torch() for name in names
-                ]
+                if self.camera_group is not None:
+                    return [
+                        self.camera_group.get_picture_cuda(name).torch() for name in names
+                    ]
+                else:
+                    # RT fallback: per-camera CUDA rendering
+                    return [
+                        torch.stack([cam.get_picture_cuda(name).torch() for cam in self._render_cameras])
+                        for name in names
+                    ]
             elif SAPIEN_RENDER_SYSTEM == "3.1":
                 return [x.torch() for x in self.camera_group.get_cuda_pictures(names)]
         else:
@@ -268,7 +276,12 @@ class RenderCamera:
 
     def take_picture(self) -> None:
         if self.scene.gpu_sim_enabled:
-            self.camera_group.take_picture()
+            if self.camera_group is not None:
+                self.camera_group.take_picture()
+            else:
+                # RT fallback: render each sub-scene camera individually
+                for cam in self._render_cameras:
+                    cam.take_picture()
         else:
             self._render_cameras[0].take_picture()
 
