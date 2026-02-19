@@ -41,6 +41,9 @@ class Args:
     """Whether to save videos"""
     save_results: Optional[str] = None
     """Path to save results to. Should be path/to/results.csv"""
+
+    shader_pack: str = "rt-fast"
+
 def main(args: Args):
     profiler = Profiler(output_format="stdout")
     num_envs = args.num_envs
@@ -62,7 +65,7 @@ def main(args: Args):
             num_envs=num_envs,
             obs_mode=args.obs_mode,
             render_mode=args.render_mode,
-            sensor_configs=dict(shader_pack="minimal", width=args.cam_width, height=args.cam_height),
+            sensor_configs=dict(shader_pack=args.shader_pack, width=args.cam_width, height=args.cam_height),
             control_mode=args.control_mode,
             sim_config=sim_config,
             **kwargs
