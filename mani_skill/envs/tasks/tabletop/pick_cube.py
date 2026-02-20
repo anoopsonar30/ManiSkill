@@ -283,13 +283,13 @@ class PickCubeEnv(BaseEnv):
         # TODO: need to add randomization of background image by segmenting the background 
         self._hidden_objects.append(self.goal_site)
 
-    # def _load_lighting(self, options: Dict):
-    #     # Initial skybox loading 
-    #     for i in range(self.num_envs):
-    #         self.scene.sub_scenes[i].set_environment_map(EXRS_DOME_LIGHTINGS[self._batched_episode_rng[i].randint(0, len(EXRS_DOME_LIGHTINGS))])
-    #         self.scene.sub_scenes[i].render_system.ambient_light = (
-    #             np.array([1, 1, 1]) * self._batched_episode_rng[i].uniform(0.05, 0.2)
-    #         )
+    def _load_lighting(self, options: Dict):
+        # Initial skybox loading 
+        for i in range(self.num_envs):
+            self.scene.sub_scenes[i].set_environment_map(EXRS_DOME_LIGHTINGS[self._batched_episode_rng[i].randint(0, len(EXRS_DOME_LIGHTINGS))])
+            self.scene.sub_scenes[i].render_system.ambient_light = (
+                np.array([1, 1, 1]) * self._batched_episode_rng[i].uniform(0.05, 0.2)
+            )
 
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
         with torch.device(self.device):
@@ -402,9 +402,8 @@ class PickCubeEnv(BaseEnv):
             qvel = qvel[..., :-2]
         elif self.robot_uids == "so100":
             qvel = qvel[..., :-1]
-        static_reward = 1 - torch.tanh(10 * torch.linalg.norm(qvel, axis=1))
-        near_goal_gate = 1 - torch.tanh(obj_to_goal_dist / self.goal_thresh)
-        reward += 2 * static_reward * near_goal_gate
+        static_reward = 1 - torch.tanh(5 * torch.linalg.norm(qvel, axis=1))
+        reward += static_reward * info["is_obj_placed"]
 
         # Orientation reward: encourage vertical approach (gripper Z aligned with -world Z)
         # tcp_pose_mat = self.agent.tcp_pose.to_transformation_matrix()
