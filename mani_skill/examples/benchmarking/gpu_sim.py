@@ -15,6 +15,7 @@ from mani_skill.utils.wrappers.flatten import FlattenActionSpaceWrapper
 import mani_skill.examples.benchmarking.envs
 from mani_skill.utils.wrappers.gymnasium import CPUGymWrapper # import benchmark env code
 from gymnasium.vector.async_vector_env import AsyncVectorEnv
+from tqdm import tqdm
 BENCHMARK_ENVS = ["FrankaPickCubeBenchmark-v1", "CartpoleBalanceBenchmark-v1", "FrankaMoveBenchmark-v1"]
 @dataclass
 class Args:
@@ -40,6 +41,9 @@ class Args:
     """Whether to save videos"""
     save_results: Optional[str] = None
     """Path to save results to. Should be path/to/results.csv"""
+
+    shader_pack: str = "rt-fast"
+
 def main(args: Args):
     profiler = Profiler(output_format="stdout")
     num_envs = args.num_envs
@@ -61,6 +65,7 @@ def main(args: Args):
             num_envs=num_envs,
             obs_mode=args.obs_mode,
             render_mode=args.render_mode,
+            sensor_configs=dict(shader_pack=args.shader_pack, width=args.cam_width, height=args.cam_height),
             control_mode=args.control_mode,
             sim_config=sim_config,
             **kwargs
@@ -93,9 +98,9 @@ def main(args: Args):
         env.reset(seed=2022)
         if args.save_video:
             images.append(env.render().cpu().numpy())
-        N = 1000
+        N = 500
         with profiler.profile("env.step", total_steps=N, num_envs=num_envs):
-            for i in range(N):
+            for i in tqdm(range(N)):
                 actions = (
                     2 * torch.rand(env.action_space.shape, device=base_env.device)
                     - 1
@@ -164,9 +169,9 @@ def main(args: Args):
                         )
                         del images
         env.reset(seed=2022)
-        N = 1000
+        N = 500
         with profiler.profile("env.step+env.reset", total_steps=N, num_envs=num_envs):
-            for i in range(N):
+            for i in tqdm(range(N)):
                 actions = (
                     2 * torch.rand(env.action_space.shape, device=base_env.device) - 1
                 )

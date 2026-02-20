@@ -1082,23 +1082,31 @@ class ManiSkillScene:
     def _sapien_gpu_setup_sensors(self, sensors: Dict[str, BaseSensor]):
         for name, sensor in sensors.items():
             if isinstance(sensor, Camera):
-                try:
-                    camera_group = self.render_system_group.create_camera_group(
-                        sensor.camera._render_cameras,
-                        list(sensor.config.shader_config.texture_names.keys()),
+                is_rt = sensor.config.shader_config.shader_pack.startswith("rt")
+                if is_rt:
+                    # RT shaders don't support batched camera groups in SAPIEN 3.0.
+                    # Store texture names for per-camera fallback rendering.
+                    sensor.camera._rt_texture_names = list(
+                        sensor.config.shader_config.texture_names.keys()
                     )
-                except RuntimeError as e:
-                    raise RuntimeError(
-                        "Unable to create GPU parallelized camera group. "
-                        "If the error is about being unable to create a buffer, you are likely using too many Cameras. "
-                        "Either use less cameras (via less parallel envs) and/or reduce the size of the cameras. "
-                        "Another common cause is using a memory intensive shader, you can try using the 'minimal' shader "
-                        "which optimizes for GPU memory but disables some advanced functionalities. "
-                        "Another option is to avoid rendering with the rgb_array mode / using the human render cameras as "
-                        "they can be more memory intensive as they typically have higher resolutions for the purposes of visualization."
-                    ) from e
-                sensor.camera.camera_group = camera_group
-                self.camera_groups[name] = camera_group
+                else:
+                    try:
+                        camera_group = self.render_system_group.create_camera_group(
+                            sensor.camera._render_cameras,
+                            list(sensor.config.shader_config.texture_names.keys()),
+                        )
+                    except RuntimeError as e:
+                        raise RuntimeError(
+                            "Unable to create GPU parallelized camera group. "
+                            "If the error is about being unable to create a buffer, you are likely using too many Cameras. "
+                            "Either use less cameras (via less parallel envs) and/or reduce the size of the cameras. "
+                            "Another common cause is using a memory intensive shader, you can try using the 'minimal' shader "
+                            "which optimizes for GPU memory but disables some advanced functionalities. "
+                            "Another option is to avoid rendering with the rgb_array mode / using the human render cameras as "
+                            "they can be more memory intensive as they typically have higher resolutions for the purposes of visualization."
+                        ) from e
+                    sensor.camera.camera_group = camera_group
+                    self.camera_groups[name] = camera_group
             else:
                 raise NotImplementedError(
                     f"This sensor {sensor} of type {sensor.__class__} has not been implemented yet on the GPU"
@@ -1145,11 +1153,6 @@ class ManiSkillScene:
                 for name, camera in self.human_render_cameras.items():
                     if camera_name is not None and name != camera_name:
                         continue
-                    assert camera.config.shader_config.shader_pack not in [
-                        "rt",
-                        "rt-fast",
-                        "rt-med",
-                    ], "ray tracing shaders do not work with parallel rendering"
                     camera.capture()
                     rgb = camera.get_obs(
                         rgb=True, depth=False, segmentation=False, position=False

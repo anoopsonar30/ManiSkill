@@ -18,4 +18,4 @@ from .push_t import PushTEnv
 from .pull_cube_tool import PullCubeToolEnv
 from .pick_cuboid import PickCuboidEnv
 from .peg_insertion_side_global_and_wrist import PegInsertionSideGlobalAndWristEnv
-from .peg_insertion_side_hard import PegInsertionSideHardEnv
+from .lift_peg_upright_real import LiftPegUprightRealEnv
