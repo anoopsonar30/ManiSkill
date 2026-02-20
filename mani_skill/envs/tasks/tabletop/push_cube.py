@@ -151,9 +151,13 @@ class PushCubeEnv(BaseEnv):
             # note that the table scene is built such that z=0 is the surface of the table.
             self.table_scene.initialize(env_idx)
 
-            # here we write some randomization code that randomizes the x, y position of the cube we are pushing in the range [-0.1, -0.1] to [0.1, 0.1]
+            # Anchor spawn to robot base position (matches TableSceneBuilder placement)
+            robot_base_x = -0.615 + 7 * 0.0254    # -0.4372m
+            robot_base_y = 1.200032 - 14 * 0.0254  # 0.8444m
+
             xyz = torch.zeros((b, 3))
-            xyz[..., :2] = torch.rand((b, 2)) * 0.2 - 0.1
+            xyz[..., 0] = torch.rand((b,)) * 0.2 - 0.1
+            xyz[..., 1] = robot_base_y + torch.rand((b,)) * 0.2 - 0.1
             xyz[..., 2] = self.cube_half_size
             q = [1, 0, 0, 0]
             # we can then create a pose object using Pose.create_from_pq to then set the cube pose with. Note that even though our quaternion

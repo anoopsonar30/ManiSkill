@@ -35,7 +35,7 @@ class TableSceneBuilder(SceneBuilder):
         # )
         builder.add_box_collision(
             pose=sapien.Pose(p=[0, 0, 0.9196429 / 2]),
-            half_size=(table_length / 2, table_width / 2, 0.9196429 / 2),
+            half_size=(table_length * scale / 2, table_width * scale / 2, 0.9196429 / 2),
         )
         builder.add_visual_from_file(
             filename=table_model_file, scale=[scale] * 3, pose=table_pose
